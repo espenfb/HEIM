@@ -25,12 +25,7 @@ wind.columns = wind_id_cap['ID']
 
 wind = wind[wind.index.year == 2017]
 
-
-wind_keys = pd.read_csv('Existing_Wind_Site_ID_Key.csv',
-                        skipinitialspace = True)
-
-
-wind_cite_id = pd.read_csv('..\\wind_cite_id_2017.csv',
+wind_cite_id = pd.read_csv('..\\wind_cite_id_2017_existing.csv',
                            skipinitialspace = True)
 
 wind_cite_id.rename(columns = {'SITE #' : 'ID'}, inplace = True)
@@ -46,26 +41,25 @@ wind_bus = pd.merge(wind_county, county_bus, how='inner', on = ['County'])
 
 bus = wind_bus.groupby(['Bus','ID']).agg({'Capacity (MW)':'sum'})
 
+bus_tot = bus.sum(level = 0)
 
-tot_bus = bus.sum(level = 0)
-
-for c in bus.index.levels[0]:
-    bus.loc[c, 'wind_share'] = (bus.loc[c]/tot_bus.loc[c])['Capacity (MW)'].tolist()
-    
+bus_tot.plot.bar()
 
 wind_profiles = pd.DataFrame(columns = bus.index.levels[0])
 for i in bus.index.levels[0]:
     wind_profile = pd.Series()
     for j in bus.loc[i].index:
         if wind_profile.empty:
-            wind_profile = bus.loc[i].loc[j]['wind_share']*wind[j]
+            wind_profile = wind[j]
         else:
-            wind_profile += bus.loc[i].loc[j]['wind_share']*wind[j]
+            wind_profile += wind[j]
     wind_profiles[i] = wind_profile
 
+wind_profiles.plot()
 
+wind_profiles.to_csv('extisting_wind_profiles_bus.csv')
 
-
-
+inst_cap = pd.read_csv('..\\..\\production_capacity\\Installed_cap.csv',
+                       index_col = 0, skiprows = [0,2])
 
 

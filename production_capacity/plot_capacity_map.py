@@ -66,7 +66,7 @@ for b in buses.index:
     print(b)
     lat = buses.Lat.loc[b]
     lon = buses.Lon.loc[b]
-    dist = np.sqrt((lon - cap['X (Lat)'])**2 + (lat - cap['Y (Long)'])**2)
+    dist = np.sqrt((lat - cap['X (Lat)'])**2 + (lon - cap['Y (Long)'])**2)
     print(sum(dist))
     if 'min_dist' in cap.columns:
         min_bool = dist <= cap['min_dist']
