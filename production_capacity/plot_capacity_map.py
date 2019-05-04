@@ -47,28 +47,43 @@ county_coord.rename(columns={'CNTY_NM':'COUNTY'}, inplace = True)
 cap = pd.merge(cap, county_coord, on = ['COUNTY'], how = 'inner' )
 cap_gdf = gpd.GeoDataFrame(cap, geometry = 'Coordinates')
 
-#for fuel in cap_gdf.FUEL.unique():
-#    fig = plt.figure(fuel)
-#    ax = plt.gca()
-#    texas.plot(ax = ax)
-#    #centroid_gdf.plot(ax = ax, color = 'lightgrey')
-#    buses_gdf.plot(ax = ax, color = 'r')
-#    cap_gdf[cap_gdf.FUEL == fuel].plot(ax = ax, color = 'y')
-#    ax.set_title(fuel)
-#    ax.figure.set_label(fuel)
-#    fig.savefig(fuel + '_loc_texas.pdf')
+for fuel in cap_gdf.FUEL.unique():
+    fig = plt.figure(fuel)
+    ax = plt.gca()
+    texas.plot(ax = ax)
+    #centroid_gdf.plot(ax = ax, color = 'lightgrey')
+    buses_gdf.plot(ax = ax, color = 'r')
+    cap_gdf[cap_gdf.FUEL == fuel].plot(ax = ax, color = 'y')
+    ax.set_title(fuel)
+    ax.figure.set_label(fuel)
+    fig.savefig(fuel + '_loc_texas.pdf')
 
 
 
 # math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
 import numpy as np
 for b in buses.index:
-    
-    lat = buses.Lat.iloc[b]
-    lon = buses.Lon.iloc[b]
-    dist = list(np.sqrt((lat - cap['X (Lat)'])**2 + (lon - cap['Y (Long)'])**2))
-    if not 'Min_dist' in cap.keys():
-        cap['Min_dist'] = dist
+    print(b)
+    lat = buses.Lat.loc[b]
+    lon = buses.Lon.loc[b]
+    dist = np.sqrt((lon - cap['X (Lat)'])**2 + (lat - cap['Y (Long)'])**2)
+    print(sum(dist))
+    if 'min_dist' in cap.columns:
+        min_bool = dist <= cap['min_dist']
+        print(sum(min_bool))
+        cap.loc[min_bool, 'min_dist'] = dist.loc[min_bool]
+        cap.loc[min_bool, 'closest_bus'] = b
     else:
-        indx = dist < cap['Min_dist']
-        cap.loc[indx.tolist(),:][ 'Min_dist'] = dist[indx]
+        print(b)
+        cap.loc[:,'min_dist'] = dist
+        cap.loc[:,'closest_bus'] = b
+        
+        
+sum_df = cap.groupby(['COUNTY','FUEL']).agg({'2028/2029': 'sum'})
+sum_df = cap.groupby(['closest_bus','COUNTY','FUEL']).agg({'2028/2029': 'sum'})
+
+sum_df = cap.groupby(['closest_bus','FUEL']).agg({'2028/2029': 'sum'})
+
+cap_df = sum_df.unstack()
+cap_df.to_csv('Installed_cap.csv')
+cap_df.plot(kind = 'bar')
