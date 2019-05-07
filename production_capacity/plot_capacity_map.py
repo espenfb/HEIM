@@ -25,7 +25,7 @@ cap.COUNTY.replace('Mcculloch', 'McCulloch', inplace = True)
 texas = gpd.read_file('..\\geo\\Texas_County_Boundaries_line\\Texas_County_Boundaries_line.shp')
 
 centroid = pd.read_csv('..\\geo\\Texas_Counties_Centroid_Map.csv')
-centroid['Coordinates'] = list(zip(centroid['X (Lat)'], centroid['Y (Long)']))
+centroid['Coordinates'] = list(zip(centroid['X (Long)'], centroid['Y (Lat)']))
 centroid['Coordinates'] = centroid['Coordinates'].apply(Point)
 centroid_gdf = gpd.GeoDataFrame(centroid, geometry = 'Coordinates')
 
@@ -41,7 +41,7 @@ buses_gdf = gpd.GeoDataFrame(buses, geometry = 'Coordinates')
 #centroid_gdf.plot(ax = ax, color = 'lightgrey')
 #buses_gdf.plot(ax = ax, color = 'r')
 
-county_coord = centroid.loc[:,['Coordinates','CNTY_NM', 'X (Lat)','Y (Long)']]
+county_coord = centroid.loc[:,['Coordinates','CNTY_NM', 'X (Long)','Y (Lat)']]
 county_coord.rename(columns={'CNTY_NM':'COUNTY'}, inplace = True)
 
 cap = pd.merge(cap, county_coord, on = ['COUNTY'], how = 'inner' )
@@ -66,7 +66,7 @@ for b in buses.index:
     print(b)
     lat = buses.Lat.loc[b]
     lon = buses.Lon.loc[b]
-    dist = np.sqrt((lat - cap['X (Lat)'])**2 + (lon - cap['Y (Long)'])**2)
+    dist = np.sqrt((lon - cap['X (Long)'])**2 + (lat - cap['Y (Lat)'])**2)
     print(sum(dist))
     if 'min_dist' in cap.columns:
         min_bool = dist <= cap['min_dist']
@@ -84,6 +84,9 @@ sum_df = cap.groupby(['closest_bus','COUNTY','FUEL']).agg({'2028/2029': 'sum'})
 
 sum_df = cap.groupby(['closest_bus','FUEL']).agg({'2028/2029': 'sum'})
 
-cap_df = sum_df.unstack()
-cap_df.to_csv('Installed_cap.csv')
+cap_df = sum_df.unstack()['2028/2029']
+cap_df.columns.name = None
+cap_df.index.name = 'Bus'
+cap_df.columns = cap_df.columns.str.title()
+cap_df.to_csv('installed_cap.csv')
 cap_df.plot(kind = 'bar')

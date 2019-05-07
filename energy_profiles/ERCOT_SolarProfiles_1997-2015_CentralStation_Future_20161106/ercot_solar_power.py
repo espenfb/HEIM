@@ -30,10 +30,16 @@ solar_cite_id = pd.read_csv('..\\solar_cite_id.csv',
 solar_cite_id.rename(columns = {'Primary' : 'ID'}, inplace = True)
 solar_cite_id = pd.merge(solar_cite_id, solar_max, how='inner', on = ['ID'])
 
-county_bus = pd.read_csv('..\\..\\grid\\county_bus.csv')
+county_bus = pd.read_csv('..\\..\\grid\\bus_county.csv')
 
 solar_bus = pd.merge(solar_cite_id, county_bus, how='inner', on = ['County'])
 
+for i in solar_bus.index:
+    row = solar_bus.loc[i]
+    if not np.isnan(row.Secondary):
+        row.ID = row.Secondary
+        solar_bus = solar_bus.append(row)
+solar_bus.drop(labels = ['Secondary'], axis = 1, inplace = True)
 
 bus = solar_bus.groupby(['Bus','ID']).agg({'Cap':'sum'})
 
@@ -41,19 +47,19 @@ bus_tot = bus.sum(level = 0)
 
 bus_tot.plot.bar()
 
-wind_profiles = pd.DataFrame(columns = bus.index.levels[0])
+solar_profiles = pd.DataFrame(columns = bus.index.levels[0])
 for i in bus.index.levels[0]:
-    wind_profile = pd.Series()
+    solar_profile = pd.Series()
     for j in bus.loc[i].index:
-        if wind_profile.empty:
-            wind_profile = wind[j]
+        if solar_profile.empty:
+            solar_profile = solar[j]
         else:
-            wind_profile += wind[j]
-    wind_profiles[i] = wind_profile
+            solar_profile += solar[j]
+    solar_profiles[i] = solar_profile
 
-wind_profiles.plot()
+solar_profiles.plot()
 
-wind_profiles.to_csv('extisting_wind_profiles_bus.csv')
+solar_profiles.to_csv('solar_profiles_bus.csv')
 
 inst_cap = pd.read_csv('..\\..\\production_capacity\\Installed_cap.csv',
                        index_col = 0, skiprows = [0,2])
