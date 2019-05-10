@@ -9,8 +9,9 @@ import pandas as pd
 import geopandas as gpd
 
 
-load = pd.read_csv('ERCOT-load-2017.csv', index_col = 0, parse_dates = [0])
-
+#load = pd.read_csv('ERCOT-load-2017.csv', index_col = 0, parse_dates = [0])
+load = pd.read_csv('zone_load_2015.csv', index_col = 0, parse_dates = [0], 
+                   skipinitialspace = True)
 
 zip_county = pd.read_csv('..\\geo\\zip_city_county_texas.csv',
                          skipinitialspace = True)
@@ -44,8 +45,7 @@ for c in county_pop.index.levels[0]:
 
 buses = pd.read_excel('..\\grid\\13_Bus_Case.xlsx', index_col = 0)
 
-tx = gpd.read_file('..\\geo\\Texas_County_Boundaries_Detailed\\Texas_County_Boundaries_Detailed.shp',
-                   index_col = 0)
+tx = gpd.read_file('..\\geo\\Texas_County_Boundaries_Detailed\\Texas_County_Boundaries_Detailed.shp')
 
 tx_point = pd.read_csv('..\\geo\\Texas_Counties_Centroid_Map.csv')
 
@@ -53,7 +53,7 @@ import numpy as np
 for b in buses.index:
     lat = buses.Lat.loc[b]
     lon = buses.Lon.loc[b]
-    dist = np.sqrt((lon - tx_point['X (Lat)'])**2 + (lat - tx_point['Y (Long)'])**2)
+    dist = np.sqrt((lon - tx_point['X (Long)'])**2 + (lat - tx_point['Y (Lat)'])**2)
     if 'min_dist' in tx_point.columns:
         min_bool = dist <= tx_point['min_dist']
         tx_point.loc[min_bool, 'min_dist'] = dist.loc[min_bool]
@@ -77,9 +77,11 @@ bus_zone = bus_info.groupby(['closest_bus','Weather Zone Name']).agg({'load_shar
 bus_zone.to_excel('bus_load.xlsx')
 
 load.columns = load.columns.str.title()
-load.rename(columns = {'Fwest': 'Far West', 'Ncent': 'North Central',
-                    'Scent' : 'South Central'},
-            inplace = True)
+load.rename(columns = {'Far_West': 'Far West', 'North_C': 'North Central',
+                    'South_C' : 'South Central', 'Southern': 'South'},
+    inplace = True)
+#load.rename(columns = {'Fwest': 'Far West', 'Ncent': 'North Central',
+#                    'Scent' : 'South Central'},inplace = True)
     
 bus_loads = pd.DataFrame(columns = bus_zone.index.levels[0])
 for i in bus_zone.index.levels[0]:

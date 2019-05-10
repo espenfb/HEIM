@@ -8,6 +8,7 @@ Created on Tue Apr  2 22:46:34 2019
 import pandas as pd
 from shapely.geometry import Point
 import geopandas as gpd
+import numpy as np
 
 filename = 'ERCOT_onshore_2015.CSV'
 
@@ -57,10 +58,15 @@ bus  = wind_info.groupby(['closest_bus','PLANT TYPE','ID']).agg({'CAP':'sum'})
 
 bus_type = wind_info.groupby(['closest_bus','PLANT TYPE']).agg({'CAP':'sum'})
 bus_type.unstack().plot(kind = 'bar')
-bus_type = bus_type.reset_index(level = [0,1])
-bus_type.rename(columns = {'closest_bus' : 'Bus', 'PLANT TYPE':'Plant type',
-                           'CAP':'Cap'}, inplace = True)
-bus_type.to_csv('wind_farms.csv',index = False)
+   
+wind_cap = bus_type.unstack()
+wind_cap.columns = wind_cap.columns.droplevel()
+wind_cap['Existing Sites'] = wind_cap['Existing Sites'] + wind_cap['Queue Sites']
+wind_cap.drop(columns = 'Queue Sites', inplace = True)
+wind_cap.rename(columns = {'Existing Sites' : 'Inst cap',
+                           'Hypothetical Sites': 'Pot cap'}, inplace = True)
+wind_cap.to_csv('wind_cap.csv',index = False)
+
 bus_tot = bus.sum(level = 0)
 
 wind_profiles = pd.DataFrame()
@@ -76,6 +82,18 @@ for i in bus.index.levels[0]:
     wind_profiles = pd.concat([wind_profiles,wind_profile_type], axis = 1)
 
 wind_profiles.plot()
+
+
+for i in wind_profiles.columns.levels[0]:
+    if 'Queue Sites' in wind_profiles[i].columns:
+        wind_profiles.loc[:,(i,'Existing Sites')] +=  wind_profiles.loc[:,(i,'Queue Sites')]
+        wind_profiles.drop((i,'Queue Sites'), axis = 1, inplace = True)
+        
+wind_profiles.rename(columns = {'Existing Sites' : 'Inst cap',
+                           'Hypothetical Sites': 'Pot cap'}, inplace = True)
+    
+wind_profiles = wind_profiles.round(2)
+wind_profiles.index.name = None
 
 wind_profiles.to_csv('wind_profiles_bus_all_types.csv')
 

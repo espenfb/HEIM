@@ -28,10 +28,6 @@ class deterministicModel(object):
         
         # Import system data
         self.data = sd.systemData(dirs)
-        # Import system time series (e.g. price, load, hydro power res curves)
-        self.data.importTimeSeries(self.start_date - relativedelta(hours = 1),
-                                   self.end_date + relativedelta(hours = 1),
-                                   loadScenGen = False)
         
         self.time = pd.date_range(start = self.start_date,
                                   end = self.end_date,
@@ -361,22 +357,24 @@ def detData(obj):
     node_data = obj.data.bus
     
     di['NODES'] = {None: node_data.index.tolist()}
-    di['NORMAL_NODES'] = {None: node_data.loc[node_data.type == 'N'].index.tolist()}
-    di['MARKET_NODES'] = {None: node_data.loc[node_data.type == 'M'].index.tolist()}
-    
+
     line_data = obj.data.line
     
     branch_indx = []
+    new_branch_indx = []
     for i in line_data.index:
-        branch_indx.append((line_data.from_bus[i],line_data.to_bus[i]))
-    
+        if line_data.Type[i] == 'Existing':
+            branch_indx.append((line_data.From[i],line_data.To[i]))
+        elif line_data.Type[i] == 'New':
+            new_branch_indx.append((line_data.From[i],line_data.To[i]))
+        
     di['BRANCHES'] = {None: branch_indx }
-    
+    di['NEW_BRANCHES'] = {None: new_branch_indx }
     
     def getBranchesAtNode():
         out = {}
         for node in di['NODES'][None]:
-            for i,j in di['BRANCHES'][None]:
+            for i,j in di['BRANCHES'][None] + di['NEW_BRANCHES'][None]:
                 if i == node or j == node:
                     if node not in out.keys():
                         out[node] = []
@@ -386,99 +384,72 @@ def detData(obj):
     di['BRANCHES_AT_NODE'] = getBranchesAtNode()
 
 
-    hydro_data = obj.data.hydro_power
+    installed = obj.data.installed
     
-    di['HYDRO_POWER_PLANTS'] = {None: [ 'H'+str(i) for i in hydro_data.bus_indx.tolist()]}
-    hydro_data['id'] = di['HYDRO_POWER_PLANTS'][None]
+    di['BIOMASS_POWER_PLANTS'] = {None: ['B%.2d' % i for i in installed.Bus.tolist()]}
+    di['COAL_POWER_PLANTS'] = {None: ['C%.2d' % i for i in installed.Bus.tolist()]}
+    di['GAS_POWER_PLANTS'] = {None: ['G%.2d' % i for i in installed.Bus.tolist()]}
+    di['NUCLEAR_POWER_PLANTS'] = {None: ['N%.2d' % i for i in installed.Bus.tolist()]}
+    di['SOLAR_POWER_PLANTS'] = {None: ['S%.2d' % i for i in installed.Bus.tolist()]}
+    di['WIND_POWER_PLANTS'] = {None: ['W%.2d' % i for i in installed.Bus.tolist()]}
     
-    wind_data = obj.data.wind_power
+    di['RENEWABLE_POWER_PLANTS'] = {None: di['WIND_POWER_PLANTS'][None] \
+      + di['SOLAR_POWER_PLANTS'][None]}
+    di['THERMAL_POWER_PLANTS'] = {None: di['BIOMASS_POWER_PLANTS'][None] \
+      + di['COAL_POWER_PLANTS'][None] + di['GAS_POWER_PLANTS'][None] \
+      + di['NUCLEAR_POWER_PLANTS'][None]}
+    di['POWER_PLANTS'] = {None: di['RENEWABLE_POWER_PLANTS'][None] \
+      + di['THERMAL_POWER_PLANTS'][None]}
     
-    di['WIND_POWER_PLANTS'] = {None: ['W'+str(i) for i in wind_data.bus_indx.tolist()]}
-    wind_data['id'] = di['WIND_POWER_PLANTS'][None]
+    load_series = obj.data.load_series
+    di['LOAD'] = {None: ['L%.2d' % int(i) for i in load_series.columns]}
     
-    di['POWER_PLANTS'] = {None: di['HYDRO_POWER_PLANTS'][None]+di['WIND_POWER_PLANTS'][None]}
-    
-    consumer_data = obj.data.consumer
-    
-    di['CONSUMERS'] = {None: ['C'+str(i) for i in consumer_data.bus_indx]}
-    consumer_data['id'] = di['CONSUMERS'][None]
-    
-    hydrogen_data = obj.data.hydrogen
-    
-    di['HYDROGEN_PLANTS'] = {None: ['E'+str(i) for i in hydrogen_data.bus_indx]}
-    hydrogen_data['id'] = di['HYDROGEN_PLANTS'][None]
-    
+    hydrogen_load = obj.data.hydrogen_load
+    di['H2_LOAD'] = {None: ['H2L%.2d' % i for i in hydrogen_load.Bus.tolist()]}
+    di['HYDROGEN_PLANTS'] = {None: ['E%.2d' % i for i in hydrogen_load.Bus.tolist()]}
           
     di['GEN_AT_NODE'] = {i:[j for j in di['POWER_PLANTS'][None]
-                    if int(j[1:]) == i] for i in di['NORMAL_NODES'][None]}
+                    if int(j[-2:]) == i] for i in di['NODES'][None]}
     
-    di['LOAD_AT_NODE'] = {i:[j for j in (di['CONSUMERS'][None] )#+di['HYDROGEN_PLANTS'][None])
-                    if int(j[1:]) == i] for i in di['NORMAL_NODES'][None]}
+    di['LOAD_AT_NODE'] = {i:[j for j in (di['LOAD'][None])
+                    if int(j[-2:]) == i] for i in di['LOAD'][None]}
+    
+    di['H2_LOAD_AT_NODE'] = {i:[j for j in (di['H2_LOAD'][None])
+                    if int(j[-2:]) == i] for i in di['H2_LOAD'][None]}
 
-    di['HYDROGEN_AT_NODE'] = {i:[j for j in (di['HYDROGEN_PLANTS'][None] )#+di['HYDROGEN_PLANTS'][None])
-                    if int(j[1:]) == i] for i in di['NORMAL_NODES'][None]}
+    di['HYDROGEN_AT_NODE'] = {i:[j for j in (di['HYDROGEN_PLANTS'][None] )
+                    if int(j[-2:]) == i] for i in di['NODES'][None]}
     
     ##Parameters##
     di['NTime'] = {None: len(obj.timerange)}
     di['Period_ratio'] = {None: len(obj.timerange)/8760}
+    print(obj.timerange)
     
-    prices = obj.data.prices    
+    param = obj.data.parameters
     
-    ex_price = {}
-    for i in di['MARKET_NODES'][None]:
-        if node_data.loc[i,'market_area'] == np.NaN:
-            print('Market node %d is missing a market area reference!' % int(i))
-            continue
-        else:
-            price_series = prices[node_data.loc[i,'market_area']]
-        for t in di['TIME'][None]:
-            date = obj.time[t]
-            ex_price[(t,i)] = float(price_series.loc[date])
+    di['Load'] = obj.data.load_series.stack().to_dict()
     
+    h2_load = pd.DataFrame(index = obj.data.load_series.index,
+                           columns = obj.data.hydrogen_load.Bus)
     
-    di['External_price'] = ex_price 
-    
-    param = obj.data.param
-    
-    consumer_load = {}
-    for i in di['CONSUMERS'][None]:
-        time = obj.time[t]
-        for t in di['TIME'][None]:
-            consumer_load[t,i] = obj.data.load.loc[time,i]
-    di['Consumer_load'] = consumer_load
+    for i in di['H2_LOAD'][None]:
+        indx = obj.data.hydrogen_load.Bus == int(i[-2:])
+        value = obj.data.hydrogen_load.loc[indx,'low']/24 #kg/h
+        h2_load.loc[:,i] = value
+        
+    di['H2_load'] = h2_load.stack().to_dict()
 
+
+    di{'Init_cap'} = obj.data.installed.stack().to_dict()
+    
+    di{'Init_solar_cap'} = obj.data.solar_cap.stack().to_dict()
+    
+    
     
     di['H2_storage_eff'] = {None: float(param['storage_eff'].values[0]*KW2MW)} # MWh/Nm^3        
     di['H2_direct_eff'] = {None: float(param['direct_eff'].values[0]*KW2MW)} # MWh/Nm^3
     di['Hydrogen_import_cost'] = {None: float(param['import_cost'].values[0])} # €/Nm3
 
-    storage_cap_max = {}
-    storage_cap_init = {}
-    storage_cap_cost = {}
-    elec_cap_max = {}
-    elec_cap_init = {}
-    elec_cap_cost = {}
-    hydrogen_demand = {}
-    init_storage = {}
-    for i in hydrogen_data.id:
-        indx = hydrogen_data.index[(hydrogen_data.id == i)].values[0]
-        storage_cap_max[i] = hydrogen_data.get_value(indx,'storage_cap_pot')
-        storage_cap_init[i] = hydrogen_data.get_value(indx,'storage_cap')
-        storage_cap_cost[i] = hydrogen_data.get_value(indx,'storage_cost')
-        elec_cap_max[i] = hydrogen_data.get_value(indx,'elec_cap_pot')
-        elec_cap_init[i] = hydrogen_data.get_value(indx,'elec_cap')
-        elec_cap_cost[i] = hydrogen_data.get_value(indx,'elec_cost')
-        init_storage[i] = hydrogen_data.get_value(indx,'init_storage')
-        for t in di['TIME'][None]:
-            hydrogen_demand[t,i] = float(obj.data.hydrogen_demand_series.get_value(t,i))
-    di['Storage_cap_max'] = storage_cap_max
-    di['Storage_cap_init'] = storage_cap_init
-    di['Storage_cap_cost'] = storage_cap_cost
-    di['Elec_cap_max'] = elec_cap_max
-    di['Elec_cap_init'] = elec_cap_init
-    di['Elec_cap_cost'] = elec_cap_cost
-    di['Initial_storage'] = init_storage
-    di['Hydrogen_demand'] = hydrogen_demand
     
     pmax = {}
     pinit = {}

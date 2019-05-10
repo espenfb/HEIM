@@ -59,9 +59,13 @@ for i in bus.index.levels[0]:
 
 solar_profiles.plot()
 
+solar_cap = solar_profiles.max().to_frame('Pot cap')
+solar_cap.loc[:,'Inst cap'] = 0
+solar_cap.to_csv('solar_cap.csv')
+
 solar_profiles.to_csv('solar_profiles_bus.csv')
 
 inst_cap = pd.read_csv('..\\..\\production_capacity\\Installed_cap.csv',
-                       index_col = 0, skiprows = [0,2])
+                       index_col = 0)
 
 
