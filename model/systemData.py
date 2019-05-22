@@ -73,10 +73,15 @@ class systemData(object):
                                        skipinitialspace=True, index_col = 0)
        
         for i in self.series.index:
+            if self.series.loc[i,'type'] == 'wind':
+                headers = [0,1]
+            else:
+                headers = [0]
             s_type = self.series.loc[i,'type']
             s_path = self.series.loc[i,'path']
             data = pd.read_csv(self.data_dir + s_path, index_col = 0,
-                                     delimiter = delim, skipinitialspace=True)
+                                     delimiter = delim, skipinitialspace=True,
+                                     header = headers, parse_dates = True)
             setattr(self, s_type +'_series', data)
             
         

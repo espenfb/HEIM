@@ -31,4 +31,8 @@ ac = ann_cost.loc[2031].dropna() # 2015$/(kW*yr)
 ac.index.name = 'Type'
 ac = ac.to_frame('Cost')
 
+
+ac.rename(index = {'CC': 'Gas', 'Solar PV': 'Solar'}, inplace = True)
+ac.drop(['CT','IGCC'], inplace = True)
+
 ac.to_csv('investment_cost.csv')

@@ -63,9 +63,11 @@ wind_cap = bus_type.unstack()
 wind_cap.columns = wind_cap.columns.droplevel()
 wind_cap['Existing Sites'] = wind_cap['Existing Sites'] + wind_cap['Queue Sites']
 wind_cap.drop(columns = 'Queue Sites', inplace = True)
-wind_cap.rename(columns = {'Existing Sites' : 'Inst cap',
-                           'Hypothetical Sites': 'Pot cap'}, inplace = True)
-wind_cap.to_csv('wind_cap.csv',index = False)
+wind_cap.rename(columns = {'Existing Sites' : 'Inst_cap',
+                           'Hypothetical Sites': 'Pot_cap'}, inplace = True)
+wind_cap.columns.name = None
+wind_cap.index.name = 'Bus'
+wind_cap.to_csv('wind_cap.csv')
 
 bus_tot = bus.sum(level = 0)
 
@@ -89,8 +91,8 @@ for i in wind_profiles.columns.levels[0]:
         wind_profiles.loc[:,(i,'Existing Sites')] +=  wind_profiles.loc[:,(i,'Queue Sites')]
         wind_profiles.drop((i,'Queue Sites'), axis = 1, inplace = True)
         
-wind_profiles.rename(columns = {'Existing Sites' : 'Inst cap',
-                           'Hypothetical Sites': 'Pot cap'}, inplace = True)
+wind_profiles.rename(columns = {'Existing Sites' : 'Inst_cap',
+                           'Hypothetical Sites': 'Pot_cap'}, inplace = True)
     
 wind_profiles = wind_profiles.round(2)
 wind_profiles.index.name = None

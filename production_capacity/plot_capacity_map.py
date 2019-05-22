@@ -88,5 +88,8 @@ cap_df = sum_df.unstack()['2028/2029']
 cap_df.columns.name = None
 cap_df.index.name = 'Bus'
 cap_df.columns = cap_df.columns.str.title()
+cap_df.Wind = cap_df.Wind + cap_df['Wind-C']
+cap_df.drop(['Wind-C', 'Storage', 'Hydro'], axis = 1, inplace = True)
+
 cap_df.to_csv('installed_cap.csv')
 cap_df.plot(kind = 'bar')
