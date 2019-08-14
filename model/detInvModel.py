@@ -18,8 +18,13 @@ class deterministicModel(object):
     ''' Deterministic model for regional power system with hydogen loads,
     wind power and hydro power. '''
     
-    def __init__(self, dirs):
+    def __init__(self, time_data, dirs):
          
+        
+        # Times
+        for k in time_data.keys():
+            setattr(self, k, time_data[k])
+        
         # Directories
         for k in dirs.keys():
             setattr(self, k, dirs[k])
@@ -32,9 +37,20 @@ class deterministicModel(object):
         min_time_solar = min(solar.index)
         max_time_wind = max(wind.index)
         max_time_solar = max(solar.index)
-        self.start_date = max([min_time_wind, min_time_solar])
-        self.end_date = min([max_time_wind, max_time_solar]) + relativedelta(hours = 1)
-        self.ref_date = min([min_time_wind, min_time_solar])
+        if hasattr(self, 'start_date'):
+            self.start_date = max([self.start_date, min_time_wind, min_time_solar])
+        else:
+            self.start_date = max([min_time_wind, min_time_solar])
+        if hasattr(self, 'end_date'):
+            self.end_date = min([self.end_date, max_time_wind, max_time_solar]) \
+                            + relativedelta(hours = 1)
+        else:
+            self.end_date = min([ max_time_wind, max_time_solar]) \
+                            + relativedelta(hours = 1)
+        if hasattr(self, 'ref_date'):
+            self.ref_date = min([self.ref_date, min_time_wind, min_time_solar])
+        else:
+            self.ref_date = min([min_time_wind, min_time_solar])
         self.timerange = range(int((self.end_date-self.start_date).total_seconds()/3600))
         self.time = pd.date_range(start = self.start_date,
                                   end = self.end_date,
@@ -72,26 +88,26 @@ class deterministicModel(object):
         
         self.detModelInstance.pprint(name)
         
-    def printRes(self):
-        
-        print('Wind power capacity: ')
-        for i in self.detModelInstance.WIND_POWER_PLANTS:
-            print(i,': ', self.detModelInstance.P_cap_init[i],' + ', '%.2f' %
-                  self.detModelInstance.prod_cap_new[i].value)
-        
-        print()
-        
-        print('Electrolyser capacity: ')
-        for i in self.detModelInstance.HYDROGEN_PLANTS:
-            print(i,': ', self.detModelInstance.Elec_cap_init[i],' + ', '%.2f' %
-                  self.detModelInstance.elec_cap_new[i].value)
-        
-        print()
-            
-        print('Hydrogen storage capacity: ')
-        for i in self.detModelInstance.HYDROGEN_PLANTS:
-            print(i,': ', self.detModelInstance.Storage_cap_init[i],' + ', '%.2f' %
-                  self.detModelInstance.storage_cap_new[i].value)
+#    def printRes(self):
+#        
+#        print('Wind power capacity: ')
+#        for i in self.detModelInstance.WIND_POWER_PLANTS:
+#            print(i,': ', self.detModelInstance.P_cap_init[i],' + ', '%.2f' %
+#                  self.detModelInstance.prod_cap_new[i].value)
+#        
+#        print()
+#        
+#        print('Electrolyser capacity: ')
+#        for i in self.detModelInstance.HYDROGEN_PLANTS:
+#            print(i,': ', self.detModelInstance.Elec_cap_init[i],' + ', '%.2f' %
+#                  self.detModelInstance.elec_cap_new[i].value)
+#        
+#        print()
+#            
+#        print('Hydrogen storage capacity: ')
+#        for i in self.detModelInstance.HYDROGEN_PLANTS:
+#            print(i,': ', self.detModelInstance.Storage_cap_init[i],' + ', '%.2f' %
+#                  self.detModelInstance.storage_cap_new[i].value)
             
     def processResults(self, printOutput = True):
         ''' Prosessing results from pyomo form to pandas data-frames
@@ -134,6 +150,7 @@ def buildDetModel():
 #        m.NODES_AT_BRANCH = pe.Set(m.BRANCHES)
         
         m.PLANT_TYPES = pe.Set()
+        m.THERMAL_PLANT_TYPES = pe.Set()
         m.PLANTS = pe.Set()
         m.BIOMASS_POWER_PLANTS = pe.Set()
         m.COAL_POWER_PLANTS = pe.Set()
@@ -156,10 +173,12 @@ def buildDetModel():
         m.GEN_AT_NODE = pe.Set(m.NODES)
         m.LOAD_AT_NODE = pe.Set(m.NODES)
         m.H2_LOAD_AT_NODE = pe.Set(m.NODES)
-        m.HYDROGEN_AT_NODE = pe.Set(m.NODES)
-        m.ELECTROLYSIS_AT_NODE = pe.Set(m.NODES)
-        m.STORAGE_AT_NODE = pe.Set(m.NODES)
+        m.H2PLANT_AT_NODE = pe.Set(m.NODES)
+        m.COMPONENTS_AT_H2PLANT = pe.Set(m.HYDROGEN_PLANTS)
+        m.ELECTROLYSIS_AT_H2PLANT = pe.Set(m.HYDROGEN_PLANTS)
+        m.STORAGE_AT_H2PLANT = pe.Set(m.HYDROGEN_PLANTS)
         m.TYPE_TO_PLANTS = pe.Set(m.PLANT_TYPES)
+        m.TYPE_TO_THERMAL_PLANTS = pe.Set(m.THERMAL_PLANT_TYPES)
         
         ##Parameters##
         m.NTime = pe.Param(within = pe.Integers)
@@ -168,8 +187,9 @@ def buildDetModel():
         m.Rationing_cost = pe.Param(within = pe.NonNegativeReals)
         
         m.Load = pe.Param(m.TIME, m.LOAD, within = pe.NonNegativeReals)
-        m.H2_load = pe.Param(m.TIME, m.H2_LOAD, within = pe.NonNegativeReals)
+        m.H2_load = pe.Param(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         
+        m.Fuel_cost = pe.Param(m.THERMAL_PLANT_TYPES, within = pe.NonNegativeReals)
         m.Inv_cost = pe.Param(m.PLANT_TYPES, within = pe.NonNegativeReals)
         m.Init_cap = pe.Param(m.THERMAL_POWER_PLANTS, within = pe.NonNegativeReals)
         m.Solar_cap_pot = pe.Param(m.SOLAR_POWER_PLANTS, within = pe.NonNegativeReals)
@@ -182,15 +202,13 @@ def buildDetModel():
         
         m.H2_storage_eff = pe.Param(within = pe.NonNegativeReals)
         m.H2_direct_eff = pe.Param(within = pe.NonNegativeReals)
-        m.Elec_cap_cost = pe.Param(within = pe.NonNegativeReals)
-        m.Storage_cap_cost = pe.Param(within = pe.NonNegativeReals)
         m.Hydrogen_import_cost = pe.Param(within = pe.NonNegativeReals)
         m.Initial_storage = pe.Param(m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         m.Hydrogen_demand = pe.Param(m.TIME, m.H2_LOAD, within = pe.NonNegativeReals)
         
         m.Trans_cap = pe.Param(m.BRANCHES,within = pe.NonNegativeReals)
         m.Branch_cost = pe.Param(m.NEW_BRANCHES,within = pe.NonNegativeReals)
-        m.Reactance = pe.Param(m.BRANCHES,within = pe.Reals) # Non-Negative?
+        m.Susceptance = pe.Param(m.BRANCHES,within = pe.Reals) # Non-Negative?
         m.Ref_power = pe.Param(within = pe.NonNegativeReals)
         m.Branch_dir_at_node = pe.Param(m.NODES,m.BRANCHES, within = pe.Integers)
                 
@@ -202,18 +220,18 @@ def buildDetModel():
         m.new_cap = pe.Var(m.PLANTS, within = pe.NonNegativeReals)
         m.cur = pe.Var(m.TIME, m.RENEWABLE_POWER_PLANTS, within = pe.NonNegativeReals)
         
-        m.elec_cap_new = pe.Var(m.ELECTROLYSIS, within = pe.NonNegativeReals)
+#        m.elec_cap_new = pe.Var(m.ELECTROLYSIS, within = pe.NonNegativeReals)
         m.hydrogen_direct = pe.Var(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         m.hydrogen_to_storage = pe.Var(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         m.hydrogen_from_storage = pe.Var(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         m.hydrogen_import = pe.Var(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
-        m.storage_cap_new = pe.Var(m.H2_STORAGE, within = pe.NonNegativeReals)
+#        m.storage_cap_new = pe.Var(m.H2_STORAGE, within = pe.NonNegativeReals)
         m.storage_level = pe.Var(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         
         m.rat = pe.Var(m.TIME, m.NODES, within = pe.NonNegativeReals)
         m.branch_flow = pe.Var(m.TIME, m.BRANCHES, within = pe.Reals)
         m.voltage_angle = pe.Var(m.TIME, m.NODES, within = pe.Reals)
-        m.new_branch_cap = pe.Var(m.TIME, m.NEW_BRANCHES, within = pe.Reals)
+        m.new_branch_cap = pe.Var(m.NEW_BRANCHES, within = pe.Reals)
         
         
         ## Constraints##
@@ -246,23 +264,26 @@ def buildDetModel():
         
 #         Hydrogen plants       
         def storageBalance_rule(m,t,i):
+            j = m.STORAGE_AT_H2PLANT[i]
             if t == 0:
-                return m.storage_level[t,i] == m.Initial_storage[i]*(m.Storage_cap_init[i] + m.storage_cap_new[i]) + m.hydrogen_to_storage[t,i] - m.hydrogen_from_storage[t,i]
+                return m.storage_level[t,i] == m.Initial_storage[i]*(m.new_cap[j]) + m.hydrogen_to_storage[t,i] - m.hydrogen_from_storage[t,i]
             else:
                 return m.storage_level[t,i] == m.storage_level[t-1,i] + m.hydrogen_to_storage[t,i] - m.hydrogen_from_storage[t,i]
         m.storageBalance = pe.Constraint(m.TIME, m.HYDROGEN_PLANTS, rule = storageBalance_rule)
         
         def endStorage_rule(m,t,i):
-            return m.storage_level[t,i] == m.Initial_storage[i]*(m.Storage_cap_init[i] + m.storage_cap_new[i])
+            j = m.STORAGE_AT_H2PLANT[i]
+            return m.storage_level[t,i] == m.Initial_storage[i]*(m.new_cap[j])
         m.endStorage = pe.Constraint(m.LAST_TIME, m.HYDROGEN_PLANTS, rule = endStorage_rule)
         
         def storageCap_rule(m, t, i):
-            return m.storage_level[t,i] <=  m.Storage_cap_init[i] + m.storage_cap_new[i]
+            j = m.STORAGE_AT_H2PLANT[i]
+            return m.storage_level[t,i] <= m.new_cap[j]
         m.storageCap = pe.Constraint(m.TIME, m.HYDROGEN_PLANTS, rule = storageCap_rule)
         
-        def maxStorageCap_rule(m,i):
-            return m.Storage_cap_init[i] + m.storage_cap_new[i]  <= m.Storage_cap_max[i]
-        m.maxStorageCap = pe.Constraint(m.HYDROGEN_PLANTS, rule = maxStorageCap_rule)
+#        def maxStorageCap_rule(m,i):
+#            return m.storage_cap_new[i]  <= m.Storage_cap_max[i]
+#        m.maxStorageCap = pe.Constraint(m.HYDROGEN_PLANTS, rule = maxStorageCap_rule)
         
         def hydrogenBalance_rule(m,t,i):
             return m.hydrogen_direct[t,i] + m.hydrogen_from_storage[t,i] \
@@ -271,23 +292,24 @@ def buildDetModel():
         
         
         def elecCap_rule(m,t,i):
+            j = m.ELECTROLYSIS_AT_H2PLANT[i]
             return m.H2_direct_eff*m.hydrogen_direct[t,i] \
-                    + m.H2_storage_eff*m.hydrogen_to_storage[t,i] <=  m.Elec_cap_init[i] + m.elec_cap_new[i]
+                    + m.H2_storage_eff*m.hydrogen_to_storage[t,i] <= m.new_cap[j]
         m.elecCap = pe.Constraint(m.TIME, m.HYDROGEN_PLANTS, rule = elecCap_rule)
         
-        def maxElecCap_rule(m,i):
-            return m.Elec_cap_init[i] + m.elec_cap_new[i]  <= m.Elec_cap_max[i]
-        m.maxElecCap = pe.Constraint(m.HYDROGEN_PLANTS, rule = maxElecCap_rule)
+#        def maxElecCap_rule(m,i):
+#            return m.elec_cap_new[i]  <= m.Elec_cap_max[i]
+#        m.maxElecCap = pe.Constraint(m.HYDROGEN_PLANTS, rule = maxElecCap_rule)
         
         # Energy balance
         def energyBalance_rule(m,t,i):
-            if i in m.HYDROGEN_AT_NODE.keys():
+            if i in m.H2PLANT_AT_NODE.keys():
                 return sum(m.prod[t,j] for j in m.GEN_AT_NODE[i]) \
                         + m.rat[t,i] + m.imp[t,i] - m.exp[t,i] \
                         == sum(m.Load[t,j] for j in m.LOAD_AT_NODE[i]) \
                         + sum(m.H2_direct_eff*m.hydrogen_direct[t,j] \
                         + m.H2_storage_eff*m.hydrogen_to_storage[t,j]
-                        for j in m.HYDROGEN_AT_NODE[i])
+                        for j in m.H2PLANT_AT_NODE[i])
             else:
                 return sum(m.prod[t,j] for j in m.GEN_AT_NODE[i]) \
                         + m.rat[t,i] + m.imp[t,i] - m.exp[t,i] \
@@ -301,23 +323,33 @@ def buildDetModel():
         m.ref_node = pe.Constraint(m.TIME, rule = referenceNode_rule)
         
         def branchFlow_rule(m,t,n,i,j):
-            return m.branch_flow[t,n,i,j] == (1/m.Reactance[n,i,j])*(m.voltage_angle[t,i]-m.voltage_angle[t,j])
+            return m.branch_flow[t,n,i,j] == m.Susceptance[n,i,j]*(m.voltage_angle[t,i]-m.voltage_angle[t,j])
         m.branchFlow = pe.Constraint(m.TIME, m.BRANCHES, rule = branchFlow_rule)
         
         def branchFlowLimit_rule(m,t,n,i,j):
             if not np.isinf(m.Trans_cap[n,i,j]):
-                return -m.Trans_cap[n,i,j]*(1/m.Ref_power)<= m.branch_flow[t,n,i,j] <= m.Trans_cap[i,j]*(1/m.Ref_power)
+                return (-m.Trans_cap[n,i,j], m.branch_flow[t,n,i,j], m.Trans_cap[n,i,j])
             else:
-                return -10000*(1/m.Ref_power)<= m.branch_flow[t,n,i,j] <= 10000*(1/m.Ref_power)
+                return (-10000, m.branch_flow[t,n,i,j], 10000)
         m.branchFlowLimit = pe.Constraint(m.TIME, m.CURRENT_BRANCHES, rule = branchFlowLimit_rule )
         
-        def newBranchFlowLimit_rule(m,t,n,i,j):
-            if not np.isinf(m.Trans_cap[i,j]):
-                return -m.new_branch_cap[n,i,j]*(1/m.Ref_power)<= m.branch_flow[t,n,i,j] <= m.new_branch_cap[n,i,j]*(1/m.Ref_power)
+        def newBranchFlowUpperLimit_rule(m,t,n,i,j):
+            if not np.isinf(m.Trans_cap[n, i,j]):
+                return m.branch_flow[t,n,i,j] <= m.new_branch_cap[n,i,j]
             else:
-                return -10000*(1/m.Ref_power)<= m.branch_flow[t,n,i,j] <= 10000*(1/m.Ref_power)
-        m.newBranchFlowLimit = pe.Constraint(m.TIME, m.NEW_BRANCHES, rule = newBranchFlowLimit_rule )
+                return m.branch_flow[t,n,i,j] <= 10000
+        m.newBranchFlowUpperLimit = pe.Constraint(m.TIME, m.NEW_BRANCHES, rule = newBranchFlowUpperLimit_rule )
         
+        def newBranchFlowLowerLimit_rule(m,t,n,i,j):
+            if not np.isinf(m.Trans_cap[n, i,j]):
+                return m.branch_flow[t,n,i,j] >= -m.new_branch_cap[n,i,j]
+            else:
+                return m.branch_flow[t,n,i,j] >= -10000
+        m.newBranchFlowLowerLimit = pe.Constraint(m.TIME, m.NEW_BRANCHES, rule = newBranchFlowLowerLimit_rule )
+        
+        def maxTransCap_rule(m,n,i,j):
+            return m.new_branch_cap[n,i,j] <= m.Trans_cap[n,i,j] 
+        m.maxTransCap = pe.Constraint(m.NEW_BRANCHES, rule = maxTransCap_rule)
         
         def nodalBalance_rule(m,t,i):
             return m.imp[t,i] - m.exp[t,i] == m.Ref_power*sum(m.Branch_dir_at_node[i,j]*m.branch_flow[t,j] for j in m.BRANCHES_AT_NODE[i])
@@ -326,8 +358,9 @@ def buildDetModel():
         def obj_rule(m):
             return  m.Period_ratio*sum(sum(m.Inv_cost[j]*m.new_cap[i] for i in m.TYPE_TO_PLANTS[j]) for j in m.PLANT_TYPES)\
                     + m.Period_ratio*sum(m.Branch_cost[i]*m.new_branch_cap[i] for i in m.NEW_BRANCHES) \
-                    + sum(sum(m.Rationing_cost*m.rat[t,i] for i in m.NODES) \
-                        + sum(m.Hydrogen_import_cost*m.hydrogen_import[t,i] for i in m.HYDROGEN_PLANTS) for t in m.TIME)
+                    + sum(sum(sum(m.Fuel_cost[j]*m.prod[t,i] for i in m.TYPE_TO_THERMAL_PLANTS[j])for j in m.THERMAL_PLANT_TYPES)
+                          + sum(m.Rationing_cost*m.rat[t,i] for i in m.NODES) \
+                          + sum(m.Hydrogen_import_cost*m.hydrogen_import[t,i] for i in m.HYDROGEN_PLANTS) for t in m.TIME)
 
         m.obj = pe.Objective(rule = obj_rule, sense = pe.minimize)
         
@@ -380,6 +413,7 @@ def detData(obj):
     installed = obj.data.installed
     
     di['PLANT_TYPES'] = {None: obj.data.inv_cost.Type}
+    di['THERMAL_PLANT_TYPES'] = {None: obj.data.fuel_cost.Category}
     
     di['BIOMASS_POWER_PLANTS'] = {None: ['B%.2d' % i for i in installed.Bus.tolist()]}
     di['COAL_POWER_PLANTS'] = {None: ['C%.2d' % i for i in installed.Bus.tolist()]}
@@ -410,7 +444,7 @@ def detData(obj):
     
     load_series = obj.data.load_series
     load_series.columns = ['L%.2d' % int(i) for i in load_series.columns]
-    load_series = load_series[(load_series.index >= obj.start_date)&(load_series.index <= obj.end_date)]
+    load_series = load_series[(load_series.index >= obj.start_date)&(load_series.index < obj.end_date)]*1.15
     load_series.index = np.arange(len(load_series.index))
     
     di['LOAD'] = {None: load_series.columns.tolist()}
@@ -428,15 +462,16 @@ def detData(obj):
     di['H2_LOAD_AT_NODE'] = {i:[j for j in (di['H2_LOAD'][None])
                     if int(j[-2:]) == i] for i in di['NODES'][None]}
 
-    di['HYDROGEN_AT_NODE'] = {i:[j for j in (di['ELECTROLYSIS'][None] + di['HYDROGEN_STORAGE'][None])
+    di['H2PLANT_AT_NODE'] = {i :[j for j in (di['HYDROGEN_PLANTS'][None])
                     if int(j[-2:]) == i] for i in di['NODES'][None]}
     
-    di['ELECTROLYSIS_AT_NODE'] = {i:[j for j in di['ELECTROLYSIS'][None]
+    di['COMPONENTS_AT_H2PLANT'] = {'H%.2d' % i :[j for j in (di['HYDROGEN_COMPONENTS'] [None])
                     if int(j[-2:]) == i] for i in di['NODES'][None]}
     
-    di['STORAGE_AT_NODE'] = {i:[j for j in di['HYDROGEN_STORAGE'][None]
-                    if int(j[-2:]) == i] for i in di['NODES'][None]}
+    di['ELECTROLYSIS_AT_H2PLANT'] = {i: [j] for j in di['ELECTROLYSIS'][None] for i in di['HYDROGEN_PLANTS'][None] if int(j[-2:]) == int(i[-2:]) }
     
+    di['STORAGE_AT_H2PLANT'] = {i: [j] for j in di['HYDROGEN_STORAGE'][None] for i in di['HYDROGEN_PLANTS'][None] if int(j[-2:]) == int(i[-2:])}
+
     di['TYPE_TO_PLANTS'] = {'Biomass' : di['BIOMASS_POWER_PLANTS'][None],
                             'Gas' : di['GAS_POWER_PLANTS'][None],
                             'Coal' : di['COAL_POWER_PLANTS'][None],
@@ -445,6 +480,11 @@ def detData(obj):
                             'Wind' : di['WIND_POWER_PLANTS'][None],
                             'Elec' : di['ELECTROLYSIS'][None], 
                             'H2_Storage' : di['HYDROGEN_STORAGE'][None]} 
+    
+    di['TYPE_TO_THERMAL_PLANTS'] = {'Biomass' : di['BIOMASS_POWER_PLANTS'][None],
+                            'Gas' : di['GAS_POWER_PLANTS'][None],
+                            'Coal' : di['COAL_POWER_PLANTS'][None],
+                            'Nuclear' : di['NUCLEAR_POWER_PLANTS'][None]}
     
     di['PLANTS'] = {None: di['POWER_PLANTS'][None]\
                           + di['HYDROGEN_COMPONENTS'][None]}
@@ -458,13 +498,15 @@ def detData(obj):
     di['Load'] = load_series.stack().to_dict()
     
     h2_load = pd.DataFrame(index = obj.data.load_series.index,
-                           columns = obj.data.hydrogen_load.Bus)
-    
-    for i in di['H2_LOAD'][None]:
+                           columns = di['HYDROGEN_PLANTS'][None])
+    for i in di['HYDROGEN_PLANTS'][None]:
         indx = obj.data.hydrogen_load.Bus == int(i[-2:])
-        value = obj.data.hydrogen_load.loc[indx,'low']/24 #kg/h
-        h2_load.loc[:,i] = value
-        
+        value = obj.data.hydrogen_load.loc[indx,'high'].values/24 #kg/h
+        if len(value) > 0:
+            h2_load.loc[:,i] = value[0]    
+    h2_load.fillna(0, inplace = True)
+    h2_load = h2_load[(h2_load.index >= obj.start_date)&(h2_load.index < obj.end_date)]/0.0899
+    h2_load.index = np.arange(len(h2_load.index))
     di['H2_load'] = h2_load.stack().to_dict()
 
     installed_data = obj.data.installed
@@ -480,11 +522,14 @@ def detData(obj):
     inv_cost.index = obj.data.inv_cost.Type
     di['Inv_cost'] = inv_cost.Cost.to_dict()
     
-
+    fuel_cost = obj.data.fuel_cost
+    fuel_cost.index = obj.data.fuel_cost.Category
+    di['Fuel_cost'] = fuel_cost.Cost.to_dict()
+    
     di['Solar_cap_pot'] = solar_cap.Pot_cap.to_dict()
     
     solar_series = obj.data.solar_series
-    solar_series = solar_series[(solar_series.index >= obj.start_date)&(solar_series.index <= obj.end_date)]
+    solar_series = solar_series[(solar_series.index >= obj.start_date)&(solar_series.index < obj.end_date)]
     solar_series.index = pd.Index(np.arange(len(solar_series.index)))
     solar_series.rename(columns = {i : 'S%.2d' % int(i) for i in solar_series.columns.tolist()},
                                   level = 0, inplace = True)
@@ -497,19 +542,21 @@ def detData(obj):
     di['H2_storage_eff'] = {None: float(param.storage_eff.values[0]*KW2MW)} # MWh/Nm^3        
     di['H2_direct_eff'] = {None: float(param.direct_eff.values[0]*KW2MW)} # MWh/Nm^3
     di['Hydrogen_import_cost'] = {None: float(param.import_cost.values[0])} # €/Nm3
+    di['Initial_storage'] = {i: 0.5 for i in di['HYDROGEN_PLANTS'][None]} 
     
     wind_series = obj.data.wind_series
-    wind_series = wind_series[(wind_series.index >= obj.start_date)&(wind_series.index <= obj.end_date)]
-    wind_series.index = pd.Index(np.arange(len(wind_series.index)))
+    wind_series = wind_series[(wind_series.index >= obj.start_date)&(wind_series.index < obj.end_date)]
+    wind_series.index = np.arange(len(wind_series.index))
     wind_series.rename(columns = {i : 'W%.2d' % int(i) for i in wind_series.columns.levels[0].tolist()},
                                   level = 0, inplace = True)
+    
     di['Wind_profile_inst'] = wind_series.stack(level = 0).Inst_cap.fillna(0).to_dict()
     di['Wind_profile_pot'] = wind_series.stack(level = 0).Pot_cap.to_dict()
     
     line_data.index = list(zip(line_data.index, line_data.From,line_data.To))
     di['Branch_cost'] = line_data[line_data.Type == 'New'].Cost.to_dict()
     di['Trans_cap'] = line_data.Cap.to_dict()
-    di['B'] = line_data.B.to_dict()
+    di['Susceptance'] = line_data.B.to_dict()
 
     di['Ref_power'] = {None: param['ref_power'].values[0]} # MW
     di['Rationing_cost'] = {None: param.at[0,'rat_cost']}

@@ -8,6 +8,8 @@ Created on Mon May  6 20:57:59 2019
 import pandas as pd
 
 
+kW2MW = 0.001
+
 on_cost = pd.read_csv('cost_of_new_capacity.csv', index_col = 0) # 2015$/kW
 
 fin_param = pd.read_csv('finalcial_parameters_new_capacity.csv', index_col = 0,
@@ -34,5 +36,8 @@ ac = ac.to_frame('Cost')
 
 ac.rename(index = {'CC': 'Gas', 'Solar PV': 'Solar'}, inplace = True)
 ac.drop(['CT','IGCC'], inplace = True)
+
+ac = ac/kW2MW# 2015$/(MW*yr)
+
 
 ac.to_csv('investment_cost.csv')

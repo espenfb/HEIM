@@ -17,6 +17,26 @@ def processDetRes(obj, model):
     ed = obj.end_date - relativedelta(hours = 1)
     timeindex =  pd.DatetimeIndex(start= sd, end = ed, freq = 'H')
     
+    obj.res['investments'] = pd.DataFrame.from_dict(model.new_cap.get_values(),
+                              orient = 'index', columns = [str(model.new_cap)])
+    obj.res['investments'][str(model.Init_cap)] = pd.DataFrame.from_dict(
+            model.Init_cap, orient = 'index', columns = [str(model.Init_cap)])
+    
+    
+    prod = pd.DataFrame.from_dict(model.prod.get_values(),
+                                 orient = 'index', columns = [str(model.prod)])
+    prod.index = pd.MultiIndex.from_tuples(prod.index, names = ['time','plant'])
+    prod = prod.unstack(level = 1).swaplevel(axis = 1)
+    
+    obj.res['plant'] = prod
+    
+    cur = pd.DataFrame.from_dict(model.cur.get_values(),
+                                 orient = 'index', columns = [str(model.cur)])
+    cur.index = pd.MultiIndex.from_tuples(cur.index, names = ['time','plant'])
+    cur = cur.unstack(level = 1).swaplevel(axis = 1)
+    
+    obj.res['plant'] = pd.concat([obj.res['plant'], cur], axis = 1).sort_values(['plant'], axis = 1)
+    
     # Get time dependent hydrogen results
     hydrogen_direct = rt.timeVarToDict(model, model.hydrogen_direct, model.HYDROGEN_PLANTS)
     hydrogen_to_storage = rt.timeVarToDict(model, model.hydrogen_to_storage, model.HYDROGEN_PLANTS)
@@ -46,39 +66,40 @@ def processDetRes(obj, model):
     exp = rt.timeVarToDict(model, model.exp, model.NODES)
     imp = rt.timeVarToDict(model, model.imp, model.NODES)
     voltage_angle = rt.timeVarToDict(model, model.voltage_angle, model.NODES)
-    rat = rt.timeVarToDict(model, model.rat, model.NORMAL_NODES)
-    nodal_price = rt.timeDualToDict(model, model.energyBalance, model.NORMAL_NODES)
-    load = rt.timeParamToDict(model, model.Consumer_load, model.CONSUMERS)
+    rat = rt.timeVarToDict(model, model.rat, model.NODES)
+    nodal_price = rt.timeDualToDict(model, model.energyBalance, model.NODES)
+    load = rt.timeParamToDict(model, model.Load, model.LOAD)
     obj.res['bus'] = pd.DataFrame()
     for i in model.NODES:
         data_entry = pd.DataFrame()
         data_entry['exp'] = pd.Series(exp[i])
         data_entry['imp'] = pd.Series(imp[i])
         data_entry['voltage_angle'] = pd.Series(voltage_angle[i])
-        if i in model.NORMAL_NODES:
+        if i in model.NODES:
             data_entry['rat'] = pd.Series(rat[i])
             data_entry['nodal_price'] = pd.Series(nodal_price[i])
-            data_entry['load'] = pd.Series(load['C'+str(i)])
+            for j in model.LOAD_AT_NODE[i]:
+                data_entry[j] = pd.Series(load[j])
         data_entry.columns = pd.MultiIndex.from_product([[i],data_entry.columns])
         obj.res['bus'] = pd.concat([obj.res['bus'],data_entry], axis = 1)
     obj.res['bus'].index = timeindex
     
      # Get time dependent hydro power results
-    prod = rt.timeVarToDict(model, model.prod, model.HYDRO_POWER_PLANTS)
-    spill = rt.timeVarToDict(model, model.spill, model.HYDRO_POWER_PLANTS)
-    res = rt.timeVarToDict(model, model.res, model.HYDRO_POWER_PLANTS)
-    water_value = rt.timeDualToDict(model, model.resBalance, model.HYDRO_POWER_PLANTS)
-    obj.res['hydro_power'] = pd.DataFrame()
-    for i in model.HYDRO_POWER_PLANTS:
-        data_entry = pd.DataFrame()
-        data_entry['prod'] = pd.Series(prod[i])
-        data_entry['spill'] = pd.Series(spill[i])
-        data_entry['res'] = pd.Series(res[i])
-        data_entry['water_value'] = pd.Series(water_value[i])
-        data_entry.columns = pd.MultiIndex.from_product([[i],data_entry.columns])
-        obj.res['hydro_power'] = pd.concat([obj.res['hydro_power'],data_entry], axis = 1)
-    if len(obj.res['hydro_power'].index) > 0:
-        obj.res['hydro_power'].index = timeindex
+#    prod = rt.timeVarToDict(model, model.prod, model.HYDRO_POWER_PLANTS)
+#    spill = rt.timeVarToDict(model, model.spill, model.HYDRO_POWER_PLANTS)
+#    res = rt.timeVarToDict(model, model.res, model.HYDRO_POWER_PLANTS)
+#    water_value = rt.timeDualToDict(model, model.resBalance, model.HYDRO_POWER_PLANTS)
+#    obj.res['hydro_power'] = pd.DataFrame()
+#    for i in model.HYDRO_POWER_PLANTS:
+#        data_entry = pd.DataFrame()
+#        data_entry['prod'] = pd.Series(prod[i])
+#        data_entry['spill'] = pd.Series(spill[i])
+#        data_entry['res'] = pd.Series(res[i])
+#        data_entry['water_value'] = pd.Series(water_value[i])
+#        data_entry.columns = pd.MultiIndex.from_product([[i],data_entry.columns])
+#        obj.res['hydro_power'] = pd.concat([obj.res['hydro_power'],data_entry], axis = 1)
+#    if len(obj.res['hydro_power'].index) > 0:
+#        obj.res['hydro_power'].index = timeindex
     
     # Get time dependent generator results
     prod = rt.timeVarToDict(model, model.prod, model.WIND_POWER_PLANTS)
@@ -100,28 +121,30 @@ def processDetRes(obj, model):
     
     # Get time dependent branch results
     branch_flow = model.branch_flow.get_values()
-    branch_flow_dict = {(i,j) : [branch_flow[t,i,j] for t in model.TIME] for i,j in model.BRANCHES}
+    branch_flow_dict = {(n,i,j) : [branch_flow[t,n,i,j] for t in model.TIME] for n,i,j in model.BRANCHES}
     obj.res['branch_flow'] = pd.DataFrame()
-    for i,j in model.BRANCHES:
-        obj.res['branch_flow'][(i,j)] = pd.Series(branch_flow_dict[i,j])
+    for n,i,j in model.BRANCHES:
+        obj.res['branch_flow'][(n,i,j)] = pd.Series(branch_flow_dict[n,i,j])
     obj.res['branch_flow'].index = timeindex
         
         
     # Get penalty data
-    obj.res['penalty'] = pd.DataFrame()
-    obj.res['penalty']['fill_dev']= pd.Series(model.fill_dev.get_values())
-    obj.res['penalty']['drain_dev']= pd.Series(model.drain_dev.get_values())
+#    obj.res['penalty'] = pd.DataFrame()
+#    obj.res['penalty']['fill_dev']= pd.Series(model.fill_dev.get_values())
+#    obj.res['penalty']['drain_dev']= pd.Series(model.drain_dev.get_values())
     
     return
 
 def saveDetRes(obj, save_dir):        
-
+    
+    obj.res['investments'].to_csv(obj.save_dir + 'investments.csv', sep = ',')
+    obj.res['plant'].to_csv(obj.save_dir + 'plant.csv', sep = ',')
     obj.res['hydrogen'].to_csv(obj.save_dir + 'hydrogen.csv', sep = ',')
     obj.res['bus'].to_csv(obj.save_dir + 'bus.csv', sep = ',')
-    obj.res['hydro_power'].to_csv(obj.save_dir + 'hydro_power.csv', sep = ',')
+#    obj.res['hydro_power'].to_csv(obj.save_dir + 'hydro_power.csv', sep = ',')
     obj.res['wind_power'].to_csv(obj.save_dir + 'wind_power.csv', sep = ',')
     obj.res['branch_flow'].to_csv(obj.save_dir + 'flow.csv', sep = ',')
-    obj.res['penalty'].to_csv(obj.save_dir + 'penalty.csv', sep = ',')
+#    obj.res['penalty'].to_csv(obj.save_dir + 'penalty.csv', sep = ',')
     
 def importDetRes(self, import_dir):
     
@@ -129,7 +152,7 @@ def importDetRes(self, import_dir):
     
     self.imp_res['hydrogen'] = pd.DataFrame().from_csv(import_dir + "hydrogen.csv", header = [0,1])
     self.imp_res['bus'] = pd.DataFrame().from_csv(import_dir + "bus.csv", header = [0,1])
-    self.imp_res['hydro_power'] = pd.DataFrame().from_csv(import_dir + "hydro_power.csv", header = [0,1])
+#    self.imp_res['hydro_power'] = pd.DataFrame().from_csv(import_dir + "hydro_power.csv", header = [0,1])
     self.imp_res['wind_power'] = pd.DataFrame().from_csv(import_dir + "wind_power.csv", header = [0,1])
     self.imp_res['flow'] = pd.DataFrame().from_csv(import_dir + "flow.csv")
-    self.imp_res['penalty'] = pd.DataFrame().from_csv(import_dir + "penalty.csv")
+#    self.imp_res['penalty'] = pd.DataFrame().from_csv(import_dir + "penalty.csv")
