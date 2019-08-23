@@ -27,10 +27,10 @@ for i in line.index:
     
     
     line.loc[i,'Distance'] = 2*R*np.arcsin(np.sqrt(np.power(np.sin((to_lat - from_lat)/2), 2) + 
-                                 np.cos(from_lat)*np.cos(to_lat))*np.power(np.sin((to_lon - from_lon)/2), 2))
+                                 np.cos(from_lat)*np.cos(to_lat)*np.power(np.sin((to_lon - from_lon)/2), 2)))
     
 
-inv_cost_mile = 1 # M$/mile
+inv_cost_mile = 2.0E6 # $/mile
 
 mile2km = 1/1.6
 
@@ -42,8 +42,10 @@ lifetime = 40.0 # years
 epsilon = irr/(1-(1+irr)**(-lifetime))
 
 ann_cost_km = inv_cost_km*epsilon
+ann_cost_mile = inv_cost_mile*epsilon
 
-line.loc[:,'Cost'] = line.loc[:,'Distance']*ann_cost_km 
+#line.loc[:,'Cost'] = line.loc[:,'Distance']*ann_cost_km 
+line.loc[:,'Cost'] = (line.loc[:,'Length']*ann_cost_km)/line.loc[:,'Cap']
 
 exists = line.index[line.loc[:,'Type'] == 'Existing']
 
