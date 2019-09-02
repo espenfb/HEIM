@@ -17,11 +17,24 @@ def processDetRes(obj, model):
     ed = obj.end_date - relativedelta(hours = 1)
     timeindex =  pd.DatetimeIndex(start= sd, end = ed, freq = 'H')
     
-    obj.res['investments'] = pd.DataFrame.from_dict(model.new_cap.get_values(),
+    obj.res['plant_inv'] = pd.DataFrame.from_dict(model.new_cap.get_values(),
                               orient = 'index', columns = [str(model.new_cap)])
-    obj.res['investments'][str(model.Init_cap)] = pd.DataFrame.from_dict(
+    obj.res['plant_inv'][str(model.Init_cap)] = pd.DataFrame.from_dict(
             model.Init_cap, orient = 'index', columns = [str(model.Init_cap)])
     
+    obj.res['line_inv'] = pd.DataFrame.from_dict(model.new_branch_cap.get_values(),
+                              orient = 'index', columns = [str(model.new_branch_cap)])
+    cap = pd.DataFrame(model.Trans_cap.iteritems(), columns = ['Index','MaxCap'])
+    cap.set_index('Index', inplace = True)
+    obj.res['line_inv'] = pd.concat([obj.res['line_inv'], cap], axis = 1, join = 'inner').dropna()
+    obj.res['line_inv']['From'] = [i[1] for i in obj.res['line_inv'].index]
+    obj.res['line_inv']['To'] = [i[2] for i in obj.res['line_inv'].index]
+    obj.res['line_inv']['Cap'] = obj.res['line_inv']['new_branch_cap']*obj.res['line_inv']['MaxCap']
+    
+    
+#    obj.res['line_inv'].index = [i[0] for i in model.new_branch_cap.get_values()]
+#    obj.res['line_inv']['from'] = [i[1] for i in model.new_branch_cap.get_values()]
+#    obj.res['line_inv']['to'] = [i[2] for i in model.new_branch_cap.get_values()]
     
     prod = pd.DataFrame.from_dict(model.prod.get_values(),
                                  orient = 'index', columns = [str(model.prod)])
@@ -43,9 +56,9 @@ def processDetRes(obj, model):
     hydrogen_from_storage = rt.timeVarToDict(model, model.hydrogen_from_storage, model.HYDROGEN_PLANTS)
     hydrogen_import = rt.timeVarToDict(model, model.hydrogen_import, model.HYDROGEN_PLANTS)
     storage_level = rt.timeVarToDict(model, model.storage_level, model.HYDROGEN_PLANTS)
-#    storageCap_dual = rt.timeDualToDict(model, model.storageCap, model.HYDROGEN_PLANTS)
-#    storage_value = rt.timeDualToDict(model, model.storageBalance, model.HYDROGEN_PLANTS)
-#    hydrogen_price = rt.timeDualToDict(model, model.hydrogenBalance, model.HYDROGEN_PLANTS)
+    storageCap_dual = rt.timeDualToDict(model, model.storageCap, model.HYDROGEN_PLANTS)
+    storage_value = rt.timeDualToDict(model, model.storageBalance, model.HYDROGEN_PLANTS)
+    hydrogen_price = rt.timeDualToDict(model, model.hydrogenBalance, model.HYDROGEN_PLANTS)
     obj.res['hydrogen'] = pd.DataFrame()
     for i in model.HYDROGEN_PLANTS:
         data_entry = pd.DataFrame()
@@ -54,9 +67,9 @@ def processDetRes(obj, model):
         data_entry['hydrogen_from_storage'] = pd.Series(hydrogen_from_storage[i])
         data_entry['hydrogen_import'] = pd.Series(hydrogen_import[i])
         data_entry['storage_level'] = pd.Series(storage_level[i])
-#        data_entry['storageCap_dual'] = pd.Series(storageCap_dual[i])
-#        data_entry['storage_value'] = pd.Series(storage_value[i])
-#        data_entry['hydrogen_price'] = pd.Series(hydrogen_price[i])
+        data_entry['storageCap_dual'] = pd.Series(storageCap_dual[i])
+        data_entry['storage_value'] = pd.Series(storage_value[i])
+        data_entry['hydrogen_price'] = pd.Series(hydrogen_price[i])
         data_entry.columns = pd.MultiIndex.from_product([[i],data_entry.columns])
         obj.res['hydrogen'] = pd.concat([obj.res['hydrogen'],data_entry], axis = 1)
     if len(obj.res['hydrogen'].index) > 0:
@@ -67,7 +80,7 @@ def processDetRes(obj, model):
     imp = rt.timeVarToDict(model, model.imp, model.NODES)
     voltage_angle = rt.timeVarToDict(model, model.voltage_angle, model.NODES)
     rat = rt.timeVarToDict(model, model.rat, model.NODES)
-#    nodal_price = rt.timeDualToDict(model, model.energyBalance, model.NODES)
+    nodal_price = rt.timeDualToDict(model, model.energyBalance, model.NODES)
     load = rt.timeParamToDict(model, model.Load, model.LOAD)
     obj.res['bus'] = pd.DataFrame()
     for i in model.NODES:
@@ -77,7 +90,7 @@ def processDetRes(obj, model):
         data_entry['voltage_angle'] = pd.Series(voltage_angle[i])
         if i in model.NODES:
             data_entry['rat'] = pd.Series(rat[i])
-#            data_entry['nodal_price'] = pd.Series(nodal_price[i])
+            data_entry['nodal_price'] = pd.Series(nodal_price[i])
             for j in model.LOAD_AT_NODE[i]:
                 data_entry[j] = pd.Series(load[j])
         data_entry.columns = pd.MultiIndex.from_product([[i],data_entry.columns])
@@ -137,7 +150,8 @@ def processDetRes(obj, model):
 
 def saveDetRes(obj, save_dir):        
     
-    obj.res['investments'].to_csv(obj.save_dir + 'investments.csv', sep = ',')
+    obj.res['plant_inv'].to_csv(obj.save_dir + 'plant_inv.csv', sep = ',')
+    obj.res['line_inv'].to_csv(obj.save_dir + 'line_inv.csv', sep = ',')
     obj.res['plant'].to_csv(obj.save_dir + 'plant.csv', sep = ',')
     obj.res['hydrogen'].to_csv(obj.save_dir + 'hydrogen.csv', sep = ',')
     obj.res['bus'].to_csv(obj.save_dir + 'bus.csv', sep = ',')

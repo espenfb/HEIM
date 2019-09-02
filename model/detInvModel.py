@@ -13,6 +13,7 @@ import systemData as sd
 import pandas as pd
 import numpy as np
 from dateutil.relativedelta import relativedelta
+import copy
 
 class deterministicModel(object):
     ''' Deterministic model for regional power system with hydogen loads,
@@ -32,7 +33,7 @@ class deterministicModel(object):
         # Import system data
         self.data = sd.systemData(dirs)
         wind = self.data.wind_series
-        solar = self.data.wind_series
+        solar = self.data.solar_series
         min_time_wind = min(wind.index)
         min_time_solar = min(solar.index)
         max_time_wind = max(wind.index)
@@ -42,11 +43,9 @@ class deterministicModel(object):
         else:
             self.start_date = max([min_time_wind, min_time_solar])
         if hasattr(self, 'end_date'):
-            self.end_date = min([self.end_date, max_time_wind, max_time_solar]) \
-                            + relativedelta(hours = 1)
+            self.end_date = min([self.end_date, max_time_wind, max_time_solar])
         else:
-            self.end_date = min([ max_time_wind, max_time_solar]) \
-                            + relativedelta(hours = 1)
+            self.end_date = min([ max_time_wind, max_time_solar]) 
         if hasattr(self, 'ref_date'):
             self.ref_date = min([self.ref_date, min_time_wind, min_time_solar])
         else:
@@ -55,6 +54,11 @@ class deterministicModel(object):
         self.time = pd.date_range(start = self.start_date,
                                   end = self.end_date,
                                   freq = 'H')
+        
+        self.buildModel()
+        
+        
+    def buildModel(self):
         
         print('Building deterministic operation model...')
         self.detModel = buildDetModel()
@@ -388,11 +392,11 @@ def detData(obj):
     di['TIME'] = {None: list(obj.timerange)}
     #di['TIME'] = {None: list(range(3))}
     di['LAST_TIME'] = {None: [list(obj.timerange)[-1]]}
-    node_data = obj.data.bus
+    node_data = copy.copy(obj.data.bus)
     
     di['NODES'] = {None: node_data.Bus.tolist()}
 
-    line_data = obj.data.line
+    line_data = copy.copy(obj.data.line)
     
     branch_indx = []
     new_branch_indx = []
@@ -419,7 +423,7 @@ def detData(obj):
     di['BRANCHES_AT_NODE'] = getBranchesAtNode()
 
 
-    installed = obj.data.installed
+    installed = copy.copy(obj.data.installed)
     
     di['PLANT_TYPES'] = {None: obj.data.inv_cost.Type}
     di['THERMAL_PLANT_TYPES'] = {None: obj.data.fuel_cost.Type}
@@ -431,7 +435,7 @@ def detData(obj):
     di['SOLAR_POWER_PLANTS'] = {None: ['S%.2d' % i for i in installed.Bus.tolist()]}
     di['WIND_POWER_PLANTS'] = {None: ['W%.2d' % i for i in installed.Bus.tolist()]}
     
-    solar_cap = obj.data.solar_cap
+    solar_cap = copy.copy(obj.data.solar_cap)
     solar_cap.index = [ 'S%.2d' % i for i in obj.data.solar_cap.Bus.tolist()]
 #    di['SOLAR_POWER_PLANTS'] = {None: solar_cap.index.tolist()}
 #    
@@ -464,14 +468,15 @@ def detData(obj):
     di['POWER_PLANTS'] = {None: di['RENEWABLE_POWER_PLANTS'][None] \
       + di['THERMAL_POWER_PLANTS'][None]}
     
-    load_series = obj.data.load_series
+    load_series = copy.copy(obj.data.load_series)
     load_series.columns = ['L%.2d' % int(i) for i in load_series.columns]
     load_series = load_series[(load_series.index >= obj.start_date)&(load_series.index < obj.end_date)]*1.15
     load_series.index = np.arange(len(load_series.index))
     
+    
     di['LOAD'] = {None: load_series.columns.tolist()}
     
-    hydrogen_load = obj.data.hydrogen_load
+    hydrogen_load = copy.copy(obj.data.hydrogen_load)
     di['H2_LOAD'] = {None: ['H2L%.2d' % i for i in hydrogen_load.Bus.tolist()]}
 #    di['HYDROGEN_PLANTS'] = {None: ['E%.2d' % i for i in hydrogen_load.Bus.tolist()]}
           
@@ -515,7 +520,7 @@ def detData(obj):
     di['NTime'] = {None: len(obj.timerange)}
     di['Period_ratio'] = {None: len(obj.timerange)/8760}
     
-    param = obj.data.parameters
+    param = copy.copy(obj.data.parameters)
     
     di['Load'] = load_series.stack().to_dict()
     
@@ -541,21 +546,21 @@ def detData(obj):
     init_cap_dict = {'%s%.2d' % (j[0],i) : init_cap[i,j] for i,j in init_cap.keys()}
     di['Init_cap'] = init_cap_dict
     
-    inv_cost = obj.data.inv_cost
+    inv_cost = copy.copy(obj.data.inv_cost)
     inv_cost.index = obj.data.inv_cost.Type
     di['Inv_cost'] = inv_cost.Cost.to_dict()
     
-    fuel_cost = obj.data.fuel_cost
+    fuel_cost = copy.copy(obj.data.fuel_cost)
     fuel_cost.index = obj.data.fuel_cost.Type
     di['Fuel_cost'] = fuel_cost.Cost.to_dict()
     
-    emission_coef = obj.data.emission
+    emission_coef = copy.copy(obj.data.emission)
     emission_coef.index = obj.data.emission.Type
     di['Emission_coef'] = emission_coef.Emission.to_dict() # kg CO2/MWh
     
     di['Solar_cap_pot'] = solar_cap.Pot_cap.to_dict()
     
-    solar_series = obj.data.solar_series
+    solar_series = copy.copy(obj.data.solar_series)
     solar_series = solar_series[(solar_series.index >= obj.start_date)&(solar_series.index < obj.end_date)]
     solar_series.index = pd.Index(np.arange(len(solar_series.index)))
     solar_series.rename(columns = {i : 'S%.2d' % int(i) for i in solar_series.columns.tolist()},
@@ -572,7 +577,7 @@ def detData(obj):
     di['Hydrogen_CO2_emissions'] = {None: float(param.CO2_H2_imp.values[0])} # kg/Nm^3
     di['Initial_storage'] = {i: 0.5 for i in di['HYDROGEN_PLANTS'][None]} 
     
-    wind_series = obj.data.wind_series
+    wind_series = copy.copy(obj.data.wind_series)
     wind_series = wind_series[(wind_series.index >= obj.start_date)&(wind_series.index < obj.end_date)]
     wind_series.index = np.arange(len(wind_series.index))
     wind_series.rename(columns = {i : 'W%.2d' % int(i) for i in wind_series.columns.levels[0].tolist()},

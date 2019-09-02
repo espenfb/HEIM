@@ -30,11 +30,14 @@ for i in line.index:
                                  np.cos(from_lat)*np.cos(to_lat)*np.power(np.sin((to_lon - from_lon)/2), 2)))
     
 
-inv_cost_mile = 2.0E6 # $/mile
+inv_cost_mile_kW = 0.93 # $/(mile*kW)
+terrain_factor = 1.3
 
-mile2km = 1/1.6
+mile2km = 1.6
+kW2MW = 0.001
 
-inv_cost_km = inv_cost_mile*mile2km
+inv_cost_km = (inv_cost_mile_kW*terrain_factor)/(kW2MW*mile2km)
+inv_cost_mile = (inv_cost_mile_kW*terrain_factor)/(kW2MW)
 
 irr = 0.06 
 lifetime = 40.0 # years
@@ -45,7 +48,7 @@ ann_cost_km = inv_cost_km*epsilon
 ann_cost_mile = inv_cost_mile*epsilon
 
 #line.loc[:,'Cost'] = line.loc[:,'Distance']*ann_cost_km 
-line.loc[:,'Cost'] = (line.loc[:,'Length']*ann_cost_km)/line.loc[:,'Cap']
+line.loc[:,'Cost'] = (line.loc[:,'Length']*ann_cost_mile)
 
 exists = line.index[line.loc[:,'Type'] == 'Existing']
 

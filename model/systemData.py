@@ -36,38 +36,7 @@ class systemData(object):
             data_file = ctrl_data.loc[i,'file']
             data = pd.read_csv(self.data_dir + data_file,
                                skipinitialspace=True)
-            
             setattr(self, data_type, data)
-                
-                
-        
-        #self.wind_cap['id'] = [ 'W'+str(i) for i in self.wind_cap.index.tolist()]
-            
-#            
-#        self.bus = pd.read_csv(self.data_dir + ctrl_data.loc[ctrl_data.type == 'bus','path'].values[0],
-#                                    skipinitialspace=True)
-#        self.bus['id'] = ['S'+str(i) for i in self.bus.index.tolist()]
-#        
-#        self.line = pd.read_csv(self.data_dir + ctrl_data.loc[ctrl_data.type == 'line','path'].values[0],
-#                                     skipinitialspace=True)
-#        
-#        self.wind_cap = pd.read_csv(self.data_dir + 
-#                                 ctrl_data.loc[ctrl_data.type =='wind_cap','path'].values[0],
-#                                 skipinitialspace=True, index_col = 0)
-#        self.wind_cap['id'] = [ 'W'+str(i) for i in self.wind_cap.index.tolist()]
-#        
-#        
-#        self.solar_cap = pd.read_csv(self.data_dir + ctrl_data.loc[ctrl_data.type == 'solar_cap','path'].values[0],
-#                                     skipinitialspace=True, index_col = 0)
-#        self.solar_cap['id'] = ['S'+str(i) for i in self.solar_cap.index.tolist()]
-#
-#        self.hydrogen_load = pd.read_csv(self.data_dir + ctrl_data.loc[ctrl_data.type == 'hydrogen_load','path'].values[0],
-#                                         skipinitialspace=True, index_col = 0)
-#        self.hydrogen_load['id'] = ['C'+str(i) for i in self.hydrogen_load.index.tolist()]
-#
-#        self.installed = pd.read_csv(self.data_dir + ctrl_data.loc[ctrl_data.type == 'installed','path'].values[0],
-#                                         skipinitialspace=True)
-#        self.installed['id'] = ['E'+str(i) for i in self.hydrogen.bus_indx]
 
         self.series = pd.read_csv(self.data_dir + ctrl_data.loc[ctrl_data.type == 'series','file'].values[0],
                                        skipinitialspace=True, index_col = 0)

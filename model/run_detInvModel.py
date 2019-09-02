@@ -16,13 +16,13 @@ time_data = {
 dirs = {
 'data_dir' : "Data\\",
 'ctrl_data_file' : 'ctrl_data.csv',
-'res_dir' : 'Result_long\\'}
+'res_dir' : 'Result\\'}
 obj = dim.deterministicModel(time_data, dirs)
 
 obj.solve()
-
+#
 #obj.printModel()
-
+#
 obj.processResults()
 
 obj.saveRes('Result\\')
