@@ -10,6 +10,7 @@ import detInvModel as dim
 import savedRes as sr
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 class metaModel(object):
     
@@ -28,14 +29,25 @@ class metaModel(object):
         
         
         
-    def runMetaModel(self, param, param_range):
+    def runMetaModel(self, param_type, param, param_range,
+                     orientation = 'col', key_col = None, col_value = None):
         
         self.param = param
         self.param_range = param_range
         
+        if orientation == 'col':
+            self.param_type = getattr(self.model.data, param_type)
+        elif orientation == 'row':
+            self.param_type = getattr(self.model.data, param_type)
+            key_row = (getattr(self.param_type, key_col) == param)
+            indx = self.param_type.index[key_row]
+        
         for i in param_range:
             
-            setattr(self.model.data.parameters,param,i)
+            if orientation == 'col':
+                setattr(self.param_type, param, i)
+            elif orientation == 'row':
+                self.param_type.loc[indx,col_value] = i
             
             self.model.buildModel()
             
@@ -57,11 +69,55 @@ class metaModel(object):
 
 
 
-    def plotH2Sorce(self):
+    def plotH2Sorce(self, plotType = 'bar'):
         
         r = pd.DataFrame()
         for n, i in enumerate(self.res):
             param_val = np.round(self.param_range[n],4)
             r[param_val] = i.getH2SourceBus().sum()
+        
+        r[r < 0] = 0
+        r.T.plot(kind = plotType)
+        
+        
+    def plotInvByType(self, plotType = 'bar'):
+        r = pd.DataFrame()
+        for n, i in enumerate(self.res):
+            param_val = np.round(self.param_range[n],4)
+            r[param_val] = i.invByType().T.sum().drop('H2_Storage')
             
-        r.T.plot(kind = 'bar')
+        r.T.plot(kind = plotType) 
+        
+    def plotEnergyByType(self, plotType = 'bar'):
+        r = pd.DataFrame()
+        for n, i in enumerate(self.res):
+            param_val = np.round(self.param_range[n],4)
+            r[param_val] = i.energyByType()['prod']
+            
+        r.T.plot(kind = plotType)
+        
+        
+    def getPriceStats(self):
+        
+        out_mean = pd.DataFrame()
+        out_std = pd.DataFrame()
+        for n, res in enumerate(self.res):
+            param = self.param_range[n]
+            for b in res.bus.columns.levels[0]:
+                out_mean.loc[int(b),param] = res.bus[b]['nodal_price'].mean()
+                out_std.loc[int(b),param] = res.bus[b]['nodal_price'].std()
+                
+        return out_mean, out_std
+    
+    def plotPrice(self):
+        
+        price_mean, price_std = self.getPriceStats()
+        
+        plt.figure('Mean price')
+        ax = plt.gca()
+        price_mean.sort_index().T.plot(ax = ax)
+        
+        plt.figure('Std price')
+        ax = plt.gca()
+        price_std.sort_index().T.plot(ax = ax)
+        

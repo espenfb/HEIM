@@ -15,6 +15,9 @@ import numpy as np
 from dateutil.relativedelta import relativedelta
 import copy
 
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 class deterministicModel(object):
     ''' Deterministic model for regional power system with hydogen loads,
     wind power and hydro power. '''
@@ -34,26 +37,16 @@ class deterministicModel(object):
         self.data = sd.systemData(dirs)
         wind = self.data.wind_series
         solar = self.data.solar_series
-        min_time_wind = min(wind.index)
-        min_time_solar = min(solar.index)
-        max_time_wind = max(wind.index)
-        max_time_solar = max(solar.index)
-        if hasattr(self, 'start_date'):
-            self.start_date = max([self.start_date, min_time_wind, min_time_solar])
-        else:
-            self.start_date = max([min_time_wind, min_time_solar])
-        if hasattr(self, 'end_date'):
-            self.end_date = min([self.end_date, max_time_wind, max_time_solar])
-        else:
-            self.end_date = min([ max_time_wind, max_time_solar]) 
-        if hasattr(self, 'ref_date'):
-            self.ref_date = min([self.ref_date, min_time_wind, min_time_solar])
-        else:
-            self.ref_date = min([min_time_wind, min_time_solar])
-        self.timerange = range(int((self.end_date-self.start_date).total_seconds()/3600))
+             
         self.time = pd.date_range(start = self.start_date,
-                                  end = self.end_date,
+                                  end = self.end_date - relativedelta(hour = 1),
                                   freq = 'H')
+        
+        self.time = self.time[self.time.isin(self.data.load_series.index)]
+        self.time = self.time[self.time.isin(wind.index)]
+        self.time = self.time[self.time.isin(solar.index)]
+        
+        self.timerange = range(len(self.time))
         
         self.buildModel()
         
@@ -470,8 +463,8 @@ def detData(obj):
     
     load_series = copy.copy(obj.data.load_series)
     load_series.columns = ['L%.2d' % int(i) for i in load_series.columns]
-    load_series = load_series[(load_series.index >= obj.start_date)&(load_series.index < obj.end_date)]*1.15
-    load_series.index = np.arange(len(load_series.index))
+    load_series = load_series[load_series.index.isin(obj.time)]#*1.15
+    load_series.index = list(obj.timerange)
     
     
     di['LOAD'] = {None: load_series.columns.tolist()}
@@ -532,7 +525,7 @@ def detData(obj):
         if len(value) > 0:
             h2_load.loc[:,i] = value[0]    
     h2_load.fillna(0, inplace = True)
-    h2_load = h2_load[(h2_load.index >= obj.start_date)&(h2_load.index < obj.end_date)]/0.0899
+    h2_load = h2_load[h2_load.index.isin(obj.time)]/0.0899
     h2_load.index = np.arange(len(h2_load.index))
     di['H2_load'] = h2_load.stack().to_dict()
 
@@ -561,7 +554,7 @@ def detData(obj):
     di['Solar_cap_pot'] = solar_cap.Pot_cap.to_dict()
     
     solar_series = copy.copy(obj.data.solar_series)
-    solar_series = solar_series[(solar_series.index >= obj.start_date)&(solar_series.index < obj.end_date)]
+    solar_series = solar_series[solar_series.index.isin(obj.time)]
     solar_series.index = pd.Index(np.arange(len(solar_series.index)))
     solar_series.rename(columns = {i : 'S%.2d' % int(i) for i in solar_series.columns.tolist()},
                                   level = 0, inplace = True)
@@ -578,7 +571,7 @@ def detData(obj):
     di['Initial_storage'] = {i: 0.5 for i in di['HYDROGEN_PLANTS'][None]} 
     
     wind_series = copy.copy(obj.data.wind_series)
-    wind_series = wind_series[(wind_series.index >= obj.start_date)&(wind_series.index < obj.end_date)]
+    wind_series = wind_series[wind_series.index.isin(obj.time)]
     wind_series.index = np.arange(len(wind_series.index))
     wind_series.rename(columns = {i : 'W%.2d' % int(i) for i in wind_series.columns.levels[0].tolist()},
                                   level = 0, inplace = True)

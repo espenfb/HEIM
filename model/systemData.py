@@ -51,6 +51,7 @@ class systemData(object):
             data = pd.read_csv(self.data_dir + s_path, index_col = 0,
                                      delimiter = delim, skipinitialspace=True,
                                      header = headers, parse_dates = True)
+            data = data[data.index.duplicated() == False]
             setattr(self, s_type +'_series', data)
             
         

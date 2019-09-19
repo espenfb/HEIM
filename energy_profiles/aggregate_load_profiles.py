@@ -91,21 +91,40 @@ for i in bus_zone.index.levels[0]:
             bus_load = bus_zone.loc[i].loc[j]['load_share']*load[j]
         else:
             bus_load += bus_zone.loc[i].loc[j]['load_share']*load[j]
-    bus_loads[i] = bus_load 
+    bus_loads[i] = bus_load
+ 
+bus_loads.to_csv('bus_loads.csv')    
 
+### Future loads
+
+# Annual load growth    
+peak_load_growth = 1.021
+energy_load_growth = 1.029
+
+energy_load_growth_eia = 1.01
+
+years_into_future = 35 # 2015 to 2050
+
+bus_loads_future = bus_loads*(energy_load_growth_eia**years_into_future)
+
+bus_loads_future.to_csv('bus_loads_2050.csv')
 
 import matplotlib.pyplot as plt
 
-plt.figure('Bus profiles')
+plt.figure('Future bus profiles')
 ax = plt.gca()
-bus_loads.plot(ax = ax)
-
-bus_loads.to_csv('bus_loads.csv')
+bus_loads_future.plot(ax = ax)
 
 plt.figure('Tot comp')
 ax2 = plt.gca()
 bus_loads.sum(axis = 1).plot(ax = ax2)
 load['Ercot'].plot(ax = ax2)
 
+plt.figure('Tot comp present vs future')
+ax2 = plt.gca()
+bus_loads.sum(axis = 1).plot(ax = ax2)
+bus_loads_future.sum(axis = 1).plot(ax = ax2)
+load['Ercot'].plot(ax = ax2)
+
 # Check the number of times the total series differ with more than 0.1%
-sum((load['Ercot'] <= 0.999*bus_loads.sum(axis = 1)) & (load['Ercot'] >= 1.001*bus_loads.sum(axis = 1)))
+#sum((load['Ercot'] <= 0.999*bus_loads.sum(axis = 1)) & (load['Ercot'] >= 1.001*bus_loads.sum(axis = 1)))

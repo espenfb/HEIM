@@ -51,11 +51,10 @@ ac.to_csv('investment_cost.csv')
 ####
 #New data
 
-eps = irr/(1-(1+irr)**(-cost['Lifetime']))
-
 cost = pd.read_csv('new_parameters_plants.csv', index_col = 0,
                    skipinitialspace = True) # 2015$/kW
 
+eps = irr/(1-(1+irr)**(-cost['Lifetime']))
 
 fuel_cost_btu = pd.read_csv('fuel_cost.csv', header = [0], index_col = 0,
                             skipinitialspace = True)

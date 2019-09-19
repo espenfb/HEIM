@@ -13,9 +13,9 @@ from dateutil.relativedelta import relativedelta
 def processDetRes(obj, model):
     
     obj.res = {}
-    sd = obj.start_date
-    ed = obj.end_date - relativedelta(hours = 1)
-    timeindex =  pd.DatetimeIndex(start= sd, end = ed, freq = 'H')
+#    sd = obj.start_date
+#    ed = obj.end_date - relativedelta(hours = 1)
+    timeindex =  obj.time
     
     obj.res['plant_inv'] = pd.DataFrame.from_dict(model.new_cap.get_values(),
                               orient = 'index', columns = [str(model.new_cap)])
