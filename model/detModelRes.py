@@ -21,6 +21,8 @@ def processDetRes(obj, model):
                               orient = 'index', columns = [str(model.new_cap)])
     obj.res['plant_inv'][str(model.Init_cap)] = pd.DataFrame.from_dict(
             model.Init_cap, orient = 'index', columns = [str(model.Init_cap)])
+    obj.res['plant_inv'][str(model.retired_cap)] = pd.DataFrame.from_dict(model.retired_cap.get_values(),
+                              orient = 'index', columns = [str(model.retired_cap)])
     
     obj.res['line_inv'] = pd.DataFrame.from_dict(model.new_branch_cap.get_values(),
                               orient = 'index', columns = [str(model.new_branch_cap)])
@@ -55,6 +57,7 @@ def processDetRes(obj, model):
     hydrogen_to_storage = rt.timeVarToDict(model, model.hydrogen_to_storage, model.HYDROGEN_PLANTS)
     hydrogen_from_storage = rt.timeVarToDict(model, model.hydrogen_from_storage, model.HYDROGEN_PLANTS)
     hydrogen_import = rt.timeVarToDict(model, model.hydrogen_import, model.HYDROGEN_PLANTS)
+    hydrogen_import_ccs = rt.timeVarToDict(model, model.hydrogen_import_ccs, model.HYDROGEN_PLANTS)
     storage_level = rt.timeVarToDict(model, model.storage_level, model.HYDROGEN_PLANTS)
     storageCap_dual = rt.timeDualToDict(model, model.storageCap, model.HYDROGEN_PLANTS)
     storage_value = rt.timeDualToDict(model, model.storageBalance, model.HYDROGEN_PLANTS)
@@ -66,6 +69,7 @@ def processDetRes(obj, model):
         data_entry['hydrogen_to_storage'] = pd.Series(hydrogen_to_storage[i])
         data_entry['hydrogen_from_storage'] = pd.Series(hydrogen_from_storage[i])
         data_entry['hydrogen_import'] = pd.Series(hydrogen_import[i])
+        data_entry['hydrogen_import_ccs'] = pd.Series(hydrogen_import_ccs[i])
         data_entry['storage_level'] = pd.Series(storage_level[i])
         data_entry['storageCap_dual'] = pd.Series(storageCap_dual[i])
         data_entry['storage_value'] = pd.Series(storage_value[i])

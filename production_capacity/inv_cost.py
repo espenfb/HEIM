@@ -56,23 +56,29 @@ cost = pd.read_csv('new_parameters_plants.csv', index_col = 0,
 
 eps = irr/(1-(1+irr)**(-cost['Lifetime']))
 
+
+
 fuel_cost_btu = pd.read_csv('fuel_cost.csv', header = [0], index_col = 0,
                             skipinitialspace = True)
 
 cost['Fuel cost [2018$/MWh]'] = cost['Heat rate [Btu/kWh]']*cost['Fuel cost [2018$/MMBtu]'].dropna()/GWh2MWh
 
-cost['Tot var cost [2018$/MWh]'] = (cost['Fuel cost [2018$/MWh]']  + cost['Var cost [2018$/MWh]']).round(2)
-
-cost['Tot inv cost [2018$/MWh]']  = ((cost['Inv cost [2018$/kW]']*eps + cost['Fixed cost [2018$/kW - yr]'])/kW2MW).round(-1)
-
-cost['Tot var cost [2018$/MWh]'].to_csv('fuel_cost_2.csv', header = ['Cost'])
-
-cost['Tot inv cost [2018$/MWh]'].to_csv('investment_cost_2.csv', header = ['Cost'])
-
-
 cost['CO2 emissions[kg CO2/MWh]'] = cost['CO2 emissions[kg CO2/MMBtu]']*cost['Heat rate [Btu/kWh]']/GWh2MWh
-
-
-
-
 cost['CO2 emissions[kg CO2/MWh]'].to_csv('emission_coeff.csv', header = ['Emission'])
+
+cost['Tot var cost [2018$/MWh]'] = (cost['Fuel cost [2018$/MWh]']  + cost['Var cost [2018$/MWh]']).round(2)
+CO2_trans_stor = 11.32 # 2018$/tonn, originally: 10.14 2011$/tonn
+cost.loc['CCS Gas','Tot var cost [2018$/MWh]'] += cost.loc['CC Gas','CO2 emissions[kg CO2/MWh]']*0.9*0.001*CO2_trans_stor
+
+
+cost['Tot inv cost [2018$/MWh]']  = ((cost['Inv cost [2018$/kW]']/kW2MW)*eps).round(-1)
+
+cost['Retirement cost [2018$/MWh]'] = cost['Tot inv cost [2018$/MWh]']*0.2
+    
+cost['Tot Fixed cost [2018$/MWh]'] = ((cost['Fixed cost [2018$/kW - yr]'])/kW2MW).round(-1)
+
+cost['Tot var cost [2018$/MWh]'].to_csv('var_cost.csv', header = ['Cost'])
+cost['Tot inv cost [2018$/MWh]'].to_csv('investment_cost_2.csv', header = ['Cost'])
+cost['Tot Fixed cost [2018$/MWh]'].to_csv('fixed_cost.csv', header = ['Cost'])
+cost['Retirement cost [2018$/MWh]'].to_csv('retirement_cost.csv', header = ['Cost'])
+

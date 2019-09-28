@@ -149,10 +149,10 @@ def buildDetModel():
         m.PLANT_TYPES = pe.Set()
         m.THERMAL_PLANT_TYPES = pe.Set()
         m.PLANTS = pe.Set()
-        m.BIOMASS_POWER_PLANTS = pe.Set()
-        m.COAL_POWER_PLANTS = pe.Set()
-        m.GAS_POWER_PLANTS = pe.Set()
-        m.NUCLEAR_POWER_PLANTS = pe.Set()
+        #m.BIOMASS_POWER_PLANTS = pe.Set()
+        #m.COAL_POWER_PLANTS = pe.Set()
+        #m.GAS_POWER_PLANTS = pe.Set()
+        #m.NUCLEAR_POWER_PLANTS = pe.Set()
         m.SOLAR_POWER_PLANTS = pe.Set()
         m.WIND_POWER_PLANTS = pe.Set()  
         m.POWER_PLANTS = pe.Set()
@@ -187,9 +187,11 @@ def buildDetModel():
         m.Load = pe.Param(m.TIME, m.LOAD, within = pe.NonNegativeReals)
         m.H2_load = pe.Param(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         
-        m.Fuel_cost = pe.Param(m.THERMAL_PLANT_TYPES, within = pe.NonNegativeReals)
         m.Emission_coef = pe.Param(m.THERMAL_PLANT_TYPES, within = pe.NonNegativeReals)
         m.Inv_cost = pe.Param(m.PLANT_TYPES, within = pe.NonNegativeReals)
+        m.Fixed_cost = pe.Param(m.PLANT_TYPES, within = pe.NonNegativeReals)
+        m.Var_cost = pe.Param(m.THERMAL_PLANT_TYPES, within = pe.NonNegativeReals)
+        m.Retirement_cost = pe.Param(m.THERMAL_PLANT_TYPES, within = pe.NonNegativeReals)
         m.Init_cap = pe.Param(m.POWER_PLANTS, within = pe.NonNegativeReals)
         m.Solar_cap_pot = pe.Param(m.SOLAR_POWER_PLANTS, within = pe.NonNegativeReals)
         m.Wind_cap_inst = pe.Param(m.WIND_POWER_PLANTS, within = pe.NonNegativeReals)
@@ -202,7 +204,9 @@ def buildDetModel():
         m.H2_storage_eff = pe.Param(within = pe.NonNegativeReals)
         m.H2_direct_eff = pe.Param(within = pe.NonNegativeReals)
         m.Hydrogen_import_cost = pe.Param(within = pe.NonNegativeReals)
+        m.Hydrogen_import_cost_ccs = pe.Param(within = pe.NonNegativeReals)
         m.Hydrogen_CO2_emissions = pe.Param(within = pe.NonNegativeReals)
+        m.Hydrogen_CO2_emissions_ccs = pe.Param(within = pe.NonNegativeReals)
         m.Initial_storage = pe.Param(m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         m.Hydrogen_demand = pe.Param(m.TIME, m.H2_LOAD, within = pe.NonNegativeReals)
         
@@ -218,6 +222,8 @@ def buildDetModel():
         
         m.prod = pe.Var(m.TIME, m.POWER_PLANTS, within = pe.NonNegativeReals)
         m.new_cap = pe.Var(m.PLANTS, within = pe.NonNegativeReals)
+        m.retired_cap = pe.Var(m.THERMAL_POWER_PLANTS, within = pe.NonNegativeReals)
+        m.available_cap = pe.Var(m.THERMAL_POWER_PLANTS, within = pe.NonNegativeReals)
         m.cur = pe.Var(m.TIME, m.RENEWABLE_POWER_PLANTS, within = pe.NonNegativeReals)
         
 #        m.elec_cap_new = pe.Var(m.ELECTROLYSIS, within = pe.NonNegativeReals)
@@ -225,6 +231,7 @@ def buildDetModel():
         m.hydrogen_to_storage = pe.Var(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         m.hydrogen_from_storage = pe.Var(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         m.hydrogen_import = pe.Var(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
+        m.hydrogen_import_ccs = pe.Var(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
 #        m.storage_cap_new = pe.Var(m.H2_STORAGE, within = pe.NonNegativeReals)
         m.storage_level = pe.Var(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         
@@ -237,8 +244,13 @@ def buildDetModel():
         ## Constraints##
         
         # ALL POWER PLANTS
+        
+        def availableCap_rule(m,i):
+            return m.available_cap[i] == m.Init_cap[i] + m.new_cap[i] - m.retired_cap[i]
+        m.availableCap = pe.Constraint(m.THERMAL_POWER_PLANTS, rule = availableCap_rule)
+        
         def maxProd_rule(m,t,i):
-            return m.prod[t,i]  <= m.Init_cap[i] + m.new_cap[i]
+            return m.prod[t,i]  <= m.available_cap[i] 
         m.maxProd = pe.Constraint(m.TIME,m.THERMAL_POWER_PLANTS, rule = maxProd_rule)
         
         def maxSolarCap_rule(m,i):
@@ -283,8 +295,8 @@ def buildDetModel():
         m.endStorage = pe.Constraint(m.LAST_TIME, m.HYDROGEN_PLANTS, rule = endStorage_rule)
         
         def storageCap_rule(m, t, i):
-            j = m.STORAGE_AT_H2PLANT[i]
-            return m.storage_level[t,i] <= m.new_cap[j]
+            #j = m.STORAGE_AT_H2PLANT[i]
+            return m.storage_level[t,i] <= 0#m.new_cap[j]
         m.storageCap = pe.Constraint(m.TIME, m.HYDROGEN_PLANTS, rule = storageCap_rule)
         
 #        def maxStorageCap_rule(m,i):
@@ -293,7 +305,8 @@ def buildDetModel():
         
         def hydrogenBalance_rule(m,t,i):
             return m.hydrogen_direct[t,i] + m.hydrogen_from_storage[t,i] \
-                    + m.hydrogen_import[t,i] == m.H2_load[t,i]
+                    + m.hydrogen_import[t,i] + m.hydrogen_import_ccs[t,i] \
+                    == m.H2_load[t,i]
         m.hydrogenBalance = pe.Constraint(m.TIME, m.HYDROGEN_PLANTS, rule = hydrogenBalance_rule)
         
         
@@ -362,11 +375,13 @@ def buildDetModel():
         m.nodalBalance = pe.Constraint(m.TIME, m.NODES, rule = nodalBalance_rule)        
         
         def obj_rule(m):
-            return  m.Period_ratio*sum(sum(m.Inv_cost[j]*m.new_cap[i] for i in m.TYPE_TO_PLANTS[j]) for j in m.PLANT_TYPES)\
-                    + m.Period_ratio*sum(m.Branch_cost[i]*m.Trans_cap[i]*m.new_branch_cap[i] for i in m.NEW_BRANCHES) \
-                    + sum(sum(sum((m.Fuel_cost[j] + m.Emission_coef[j]*m.CO2_cost)*m.prod[t,i] for i in m.TYPE_TO_THERMAL_PLANTS[j])for j in m.THERMAL_PLANT_TYPES)
+            return  m.Period_ratio*(sum(sum(m.Inv_cost[j]*m.new_cap[i]  for i in m.TYPE_TO_PLANTS[j]) for j in m.PLANT_TYPES)\
+                    + sum(sum(m.Fixed_cost[j]*m.available_cap[i] + m.Retirement_cost[j]*m.retired_cap[i] for i in m.TYPE_TO_THERMAL_PLANTS[j])for j in m.THERMAL_PLANT_TYPES)\
+                    + sum(m.Branch_cost[i]*m.Trans_cap[i]*m.new_branch_cap[i] for i in m.NEW_BRANCHES)) \
+                    + sum(sum(sum((m.Var_cost[j] + m.Emission_coef[j]*m.CO2_cost)*m.prod[t,i] for i in m.TYPE_TO_THERMAL_PLANTS[j])for j in m.THERMAL_PLANT_TYPES)
                           + sum(m.Rationing_cost*m.rat[t,i] for i in m.NODES) \
-                          + sum((m.Hydrogen_import_cost + m.Hydrogen_CO2_emissions*m.CO2_cost)*m.hydrogen_import[t,i] for i in m.HYDROGEN_PLANTS) for t in m.TIME)
+                          + sum((m.Hydrogen_import_cost + m.Hydrogen_CO2_emissions*m.CO2_cost)*m.hydrogen_import[t,i]
+                                + (m.Hydrogen_import_cost_ccs + m.Hydrogen_CO2_emissions_ccs*m.CO2_cost)*m.hydrogen_import_ccs[t,i] for i in m.HYDROGEN_PLANTS) for t in m.TIME)
 
         m.obj = pe.Objective(rule = obj_rule, sense = pe.minimize)
         
@@ -419,14 +434,23 @@ def detData(obj):
     installed = copy.copy(obj.data.installed)
     
     di['PLANT_TYPES'] = {None: obj.data.inv_cost.Type}
-    di['THERMAL_PLANT_TYPES'] = {None: obj.data.fuel_cost.Type}
+    di['THERMAL_PLANT_TYPES'] = {None: obj.data.var_cost.Type}
     
-    di['BIOMASS_POWER_PLANTS'] = {None: ['B%.2d' % i for i in installed.Bus.tolist()]}
-    di['COAL_POWER_PLANTS'] = {None: ['C%.2d' % i for i in installed.Bus.tolist()]}
-    di['GAS_POWER_PLANTS'] = {None: ['G%.2d' % i for i in installed.Bus.tolist()]}
-    di['NUCLEAR_POWER_PLANTS'] = {None: ['N%.2d' % i for i in installed.Bus.tolist()]}
-    di['SOLAR_POWER_PLANTS'] = {None: ['S%.2d' % i for i in installed.Bus.tolist()]}
-    di['WIND_POWER_PLANTS'] = {None: ['W%.2d' % i for i in installed.Bus.tolist()]}
+    obj.type2prefix = {'Biomass' : 'B', 'CC Gas' : 'CCG', 'CT Gas' : 'CTG',
+                            'ICE Gas' : 'ICEG', 'CCS Gas' : 'CCSG',
+                            'Coal' : 'C', 'Nuclear' : 'N', 'Solar' : 'S',
+                            'Wind' : 'W', 'Elec' : 'E', 'H2_Storage' : 'HS',
+                            'Hydrogen': 'H', 'Load': 'L', 'H2_Load': 'H2L'}
+    
+    di['BIOMASS_POWER_PLANTS'] = {None: [obj.type2prefix['Biomass'] + '%.2d' % i for i in installed.Bus.tolist()]}
+    di['COAL_POWER_PLANTS'] = {None: [obj.type2prefix['Coal'] +'%.2d' % i for i in installed.Bus.tolist()]}
+    di['CC_GAS_POWER_PLANTS'] = {None: [obj.type2prefix['CC Gas'] + '%.2d' % i for i in installed.Bus.tolist()]}
+    di['CT_GAS_POWER_PLANTS'] = {None: [obj.type2prefix['CT Gas'] + '%.2d' % i for i in installed.Bus.tolist()]}
+    di['ICE_GAS_POWER_PLANTS'] = {None: [obj.type2prefix['ICE Gas'] + '%.2d' % i for i in installed.Bus.tolist()]}
+    di['CCS_GAS_POWER_PLANTS'] = {None: [obj.type2prefix['CCS Gas'] + '%.2d' % i for i in installed.Bus.tolist()]}
+    di['NUCLEAR_POWER_PLANTS'] = {None: [obj.type2prefix['Nuclear'] + '%.2d' % i for i in installed.Bus.tolist()]}
+    di['SOLAR_POWER_PLANTS'] = {None: [obj.type2prefix['Solar'] + '%.2d' % i for i in installed.Bus.tolist()]}
+    di['WIND_POWER_PLANTS'] = {None: [obj.type2prefix['Wind'] + '%.2d' % i for i in installed.Bus.tolist()]}
     
     solar_cap = copy.copy(obj.data.solar_cap)
     solar_cap.index = [ 'S%.2d' % i for i in obj.data.solar_cap.Bus.tolist()]
@@ -447,14 +471,17 @@ def detData(obj):
     wind_cap['Bus'] = [int(i) for i in wind_cap.Bus]
 #    di['WIND_POWER_PLANTS'] = {None: wind_cap.index.tolist()}
     
-    di['HYDROGEN_PLANTS'] = {None: ['H%.2d' % i for i in installed.Bus.tolist()]}
-    di['ELECTROLYSIS'] = {None: ['E%.2d' % i for i in installed.Bus.tolist()]}
-    di['HYDROGEN_STORAGE'] = {None: ['HS%.2d' % i for i in installed.Bus.tolist()]}
+    di['HYDROGEN_PLANTS'] = {None: [obj.type2prefix['Hydrogen'] + '%.2d' % i for i in installed.Bus.tolist()]}
+    di['ELECTROLYSIS'] = {None: [obj.type2prefix['Elec'] + '%.2d' % i for i in installed.Bus.tolist()]}
+    di['HYDROGEN_STORAGE'] = {None: [obj.type2prefix['H2_Storage'] + '%.2d' % i for i in installed.Bus.tolist()]}
     di['HYDROGEN_COMPONENTS'] = {None: di['ELECTROLYSIS'][None] \
                                   + di['HYDROGEN_STORAGE'][None]}
     
     di['RENEWABLE_POWER_PLANTS'] = {None: di['WIND_POWER_PLANTS'][None] \
       + di['SOLAR_POWER_PLANTS'][None]}
+    di['GAS_POWER_PLANTS'] = {None: di['CC_GAS_POWER_PLANTS'][None] \
+      + di['CT_GAS_POWER_PLANTS'][None] + di['ICE_GAS_POWER_PLANTS'][None] 
+      + di['CCS_GAS_POWER_PLANTS'][None]}
     di['THERMAL_POWER_PLANTS'] = {None: di['BIOMASS_POWER_PLANTS'][None] \
       + di['COAL_POWER_PLANTS'][None] + di['GAS_POWER_PLANTS'][None] \
       + di['NUCLEAR_POWER_PLANTS'][None]}
@@ -462,7 +489,7 @@ def detData(obj):
       + di['THERMAL_POWER_PLANTS'][None]}
     
     load_series = copy.copy(obj.data.load_series)
-    load_series.columns = ['L%.2d' % int(i) for i in load_series.columns]
+    load_series.columns = [obj.type2prefix['Load'] + '%.2d' % int(i) for i in load_series.columns]
     load_series = load_series[load_series.index.isin(obj.time)]#*1.15
     load_series.index = list(obj.timerange)
     
@@ -470,7 +497,7 @@ def detData(obj):
     di['LOAD'] = {None: load_series.columns.tolist()}
     
     hydrogen_load = copy.copy(obj.data.hydrogen_load)
-    di['H2_LOAD'] = {None: ['H2L%.2d' % i for i in hydrogen_load.Bus.tolist()]}
+    di['H2_LOAD'] = {None: [obj.type2prefix['H2_Load'] + '%.2d' % i for i in hydrogen_load.Bus.tolist()]}
 #    di['HYDROGEN_PLANTS'] = {None: ['E%.2d' % i for i in hydrogen_load.Bus.tolist()]}
           
     di['GEN_AT_NODE'] = {i:[j for j in di['POWER_PLANTS'][None]
@@ -493,7 +520,10 @@ def detData(obj):
     di['STORAGE_AT_H2PLANT'] = {i: [j] for j in di['HYDROGEN_STORAGE'][None] for i in di['HYDROGEN_PLANTS'][None] if int(j[-2:]) == int(i[-2:])}
 
     di['TYPE_TO_PLANTS'] = {'Biomass' : di['BIOMASS_POWER_PLANTS'][None],
-                            'Gas' : di['GAS_POWER_PLANTS'][None],
+                            'CC Gas' : di['CC_GAS_POWER_PLANTS'][None],
+                            'CT Gas' : di['CT_GAS_POWER_PLANTS'][None],
+                            'ICE Gas' : di['ICE_GAS_POWER_PLANTS'][None],
+                            'CCS Gas' : di['CCS_GAS_POWER_PLANTS'][None],
                             'Coal' : di['COAL_POWER_PLANTS'][None],
                             'Nuclear' : di['NUCLEAR_POWER_PLANTS'][None],
                             'Solar' : di['SOLAR_POWER_PLANTS'][None],
@@ -502,7 +532,10 @@ def detData(obj):
                             'H2_Storage' : di['HYDROGEN_STORAGE'][None]} 
     
     di['TYPE_TO_THERMAL_PLANTS'] = {'Biomass' : di['BIOMASS_POWER_PLANTS'][None],
-                            'Gas' : di['GAS_POWER_PLANTS'][None],
+                            'CC Gas' : di['CC_GAS_POWER_PLANTS'][None],
+                            'CT Gas' : di['CT_GAS_POWER_PLANTS'][None],
+                            'ICE Gas' : di['ICE_GAS_POWER_PLANTS'][None],
+                            'CCS Gas' : di['CCS_GAS_POWER_PLANTS'][None],
                             'Coal' : di['COAL_POWER_PLANTS'][None],
                             'Nuclear' : di['NUCLEAR_POWER_PLANTS'][None]}
     
@@ -536,16 +569,24 @@ def detData(obj):
                         axis = 1)
     init_cap.fillna(0, inplace = True)
     init_cap = init_cap.stack().to_dict()
-    init_cap_dict = {'%s%.2d' % (j[0],i) : init_cap[i,j] for i,j in init_cap.keys()}
+    init_cap_dict = {'%s%.2d' % (obj.type2prefix[j],i) : init_cap[i,j] for i,j in init_cap.keys()}
     di['Init_cap'] = init_cap_dict
     
     inv_cost = copy.copy(obj.data.inv_cost)
     inv_cost.index = obj.data.inv_cost.Type
     di['Inv_cost'] = inv_cost.Cost.to_dict()
     
-    fuel_cost = copy.copy(obj.data.fuel_cost)
-    fuel_cost.index = obj.data.fuel_cost.Type
-    di['Fuel_cost'] = fuel_cost.Cost.to_dict()
+    fixed_cost = copy.copy(obj.data.fixed_cost)
+    fixed_cost.index = obj.data.fixed_cost.Type
+    di['Fixed_cost'] = fixed_cost.Cost.to_dict()
+    
+    var_cost = copy.copy(obj.data.var_cost)
+    var_cost.index = obj.data.var_cost.Type
+    di['Var_cost'] = var_cost.Cost.to_dict()
+    
+    retirement_cost = copy.copy(obj.data.retirement_cost)
+    retirement_cost.index = obj.data.retirement_cost.Type
+    di['Retirement_cost'] = retirement_cost.Cost.to_dict()
     
     emission_coef = copy.copy(obj.data.emission)
     emission_coef.index = obj.data.emission.Type
@@ -556,7 +597,7 @@ def detData(obj):
     solar_series = copy.copy(obj.data.solar_series)
     solar_series = solar_series[solar_series.index.isin(obj.time)]
     solar_series.index = pd.Index(np.arange(len(solar_series.index)))
-    solar_series.rename(columns = {i : 'S%.2d' % int(i) for i in solar_series.columns.tolist()},
+    solar_series.rename(columns = {i : obj.type2prefix['Solar'] + '%.2d' % int(i) for i in solar_series.columns.tolist()},
                                   level = 0, inplace = True)
     di['Solar_profile_pot'] = solar_series.stack(level = 0).to_dict()
     wind_cap.fillna(0, inplace = True)
@@ -567,13 +608,15 @@ def detData(obj):
     di['H2_storage_eff'] = {None: float(param.storage_eff.values[0]*KW2MW)} # MWh/Nm^3        
     di['H2_direct_eff'] = {None: float(param.direct_eff.values[0]*KW2MW)} # MWh/Nm^3
     di['Hydrogen_import_cost'] = {None: float(param.import_cost.values[0])} # €/Nm3
+    di['Hydrogen_import_cost_ccs'] = {None: float(param.import_cost_ccs.values[0])} # €/Nm3
     di['Hydrogen_CO2_emissions'] = {None: float(param.CO2_H2_imp.values[0])} # kg/Nm^3
+    di['Hydrogen_CO2_emissions_ccs'] = {None: float(param.CO2_H2_imp_ccs.values[0])} # kg/Nm^3
     di['Initial_storage'] = {i: 0.5 for i in di['HYDROGEN_PLANTS'][None]} 
     
     wind_series = copy.copy(obj.data.wind_series)
     wind_series = wind_series[wind_series.index.isin(obj.time)]
     wind_series.index = np.arange(len(wind_series.index))
-    wind_series.rename(columns = {i : 'W%.2d' % int(i) for i in wind_series.columns.levels[0].tolist()},
+    wind_series.rename(columns = {i : obj.type2prefix['Wind'] + '%.2d' % int(i) for i in wind_series.columns.levels[0].tolist()},
                                   level = 0, inplace = True)
     
     di['Wind_profile_inst'] = wind_series.stack(level = 0).Inst_cap.fillna(0).to_dict()

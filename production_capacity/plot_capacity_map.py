@@ -22,6 +22,24 @@ cap.COUNTY.replace('Ft. Bend', 'Fort Bend', inplace = True)
 cap.COUNTY.replace('Mclennan', 'McLennan', inplace = True)
 cap.COUNTY.replace('Mcculloch', 'McCulloch', inplace = True)
 
+
+# Separate gas power plant by type
+gas = (cap['FUEL'] == 'GAS')
+
+cap.loc[((cap['UNIT NAME'].str.find('ENGINE') != -1)&gas).to_list(),'FUEL'] = 'ICE GAS'
+cap.loc[((cap['UNIT CODE'].str.find('AGR') != -1)&gas).to_list(),'FUEL'] = 'ICE GAS'
+
+cap.loc[((cap['UNIT CODE'].str.find('CTG') != -1)&gas).to_list(),'FUEL'] = 'CT GAS'
+cap.loc[((cap['UNIT NAME'].str.find('CTG') != -1)&gas).to_list(),'FUEL'] = 'CT GAS'
+cap.loc[((cap['UNIT NAME'].str.find('CT') != -1)&gas).to_list(),'FUEL'] = 'CT GAS'
+
+cap.loc[((cap['UNIT NAME'].str.find('STG') != -1)&gas).to_list(),'FUEL'] = 'CC GAS'
+cap.loc[((cap['UNIT NAME'].str.find('ST') != -1)&gas).to_list(),'FUEL'] = 'CC GAS'
+cap.loc[((cap['UNIT NAME'].str.find('CS') != -1)&gas).to_list(),'FUEL'] = 'CC GAS'
+cap.loc[(cap['FUEL'] == 'GAS').to_list(),'FUEL'] = 'CC GAS'
+
+
+
 texas = gpd.read_file('..\\geo\\Texas_County_Boundaries_line\\Texas_County_Boundaries_line.shp')
 
 centroid = pd.read_csv('..\\geo\\Texas_Counties_Centroid_Map.csv')
@@ -90,6 +108,7 @@ cap_df.index.name = 'Bus'
 cap_df.columns = cap_df.columns.str.title()
 cap_df.Wind = cap_df.Wind + cap_df['Wind-C']
 cap_df.drop(['Wind-C', 'Storage', 'Hydro'], axis = 1, inplace = True)
+cap_df.loc[:,'CCS Gas'] = np.nan 
 
 cap_df.to_csv('installed_cap.csv')
 cap_df.plot(kind = 'bar')

@@ -11,12 +11,12 @@ import numpy as np
 
 time_data = {
 'start_date': pd.Timestamp(year = 2015, month = 1, day = 1),
-'end_date': pd.Timestamp(year = 2015, month = 12, day = 1),
+'end_date': pd.Timestamp(year = 2015, month = 2, day = 1),
 'ref_date': pd.Timestamp(year = 2015, month = 1, day = 1)}
 dirs = {
 'data_dir' : "Data\\",
 'ctrl_data_file' : 'ctrl_data.csv',
-'res_dir' : 'Meta_results_newload\\'}
+'res_dir' : 'Meta_results_ccs\\'}
 
 obj = mm.metaModel(time_data, dirs)
 
@@ -30,7 +30,7 @@ obj = mm.metaModel(time_data, dirs)
 
 param_type = 'parameters'
 param = 'CO2_cost'
-param_range = np.arange(0.03,0.29,0.03)
+param_range = np.arange(0.00,0.29,0.03)
 
 
-obj.runMetaModel(param_type, param, param_range)
+#obj.runMetaModel(param_type, param, param_range)

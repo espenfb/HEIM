@@ -39,7 +39,8 @@ class savedRes(object):
             
         self.type_identifier = {'HS': 'H2_Storage', 'B': 'Bio', 'S': 'Solar',
                            'N': 'Nuclear', 'E': 'Elec', 'C': 'Coal',
-                           'G': 'Gas', 'W': 'Wind'}
+                           'CCG': 'CC Gas', 'CTG': 'CT Gas', 'ICEG': 'ICE Gas',
+                            'CCSG': 'CCS Gas', 'W': 'Wind'}
         
         self.plant_inv.sort_index(axis = 1, inplace = True)
         self.addGeoBus()
@@ -75,7 +76,7 @@ class savedRes(object):
                     out.loc[(int(b),self.type_identifier[t]), c] = self.plant_inv.loc[indx,c]
                     
         out = out[out.sum(axis = 1) != 0]
-        out.drop(labels = 'H2_Storage', level = 1, inplace = True)
+#        out.drop(labels = 'H2_Storage', level = 1, inplace = True)
         out.sort_index(level = 0, inplace = True)
         return out
     
@@ -94,6 +95,18 @@ class savedRes(object):
                         res.loc[item_type,c] += self.plant[i,c].sum()
         return res
     
+    def emissionByType(self):
+        prod = self.energyByType()['prod']
+        emission_coeff = self.data.emission.set_index('Type').Emission
+        emission_coeff.rename({'Biomass':'Bio'}, inplace = True)
+        
+        return prod*emission_coeff
+    
+    def emissionFromH2(self):
+        e_rate = self.data.parameters['CO2_H2_imp'][0]
+        ng_hydrogen = self.getH2SourceBus().sum()['Natural Gas']
+        return e_rate*ng_hydrogen
+    
     def plotEnergyByType(self):
         energyByType = self.energyByType()
         energyByType.plot(kind = 'bar')
@@ -111,6 +124,7 @@ class savedRes(object):
     def plotInvByBus(self):
         
         df = self.invByBus()
+        df.retired_cap = df.retired_cap*-1 
         ncols = len(df.index.levels[0])
         #plotting
         fig, axes = plt.subplots(nrows=1,
@@ -149,11 +163,13 @@ class savedRes(object):
         
     def getH2SourceBus(self):
         
-        df = pd.DataFrame(columns = ['Direct','Storage','Natural Gas'])
+        df = pd.DataFrame(columns = ['Direct','Storage','Natural Gas',
+                                     'Natural Gas CCS'])
         for i, row in enumerate(self.hydrogen.columns.levels[0]):
             df.loc[row,'Direct'] = self.hydrogen[row].hydrogen_direct.sum()
             df.loc[row,'Storage'] = self.hydrogen[row].hydrogen_from_storage.sum()
             df.loc[row,'Natural Gas'] = self.hydrogen[row].hydrogen_import.sum()
+            df.loc[row,'Natural Gas CCS'] = self.hydrogen[row].hydrogen_import_ccs.sum()
         return df
              
     def plotH2ByBus(self, plotType = 'bar'):
@@ -161,7 +177,7 @@ class savedRes(object):
         df = self.getH2SourceBus()
         
         df.plot(kind = plotType, stacked = True)
-        plt.legend(['Direct','Storage','Natural Gas'])
+        plt.legend(['Direct','Storage','Natural Gas', 'Natural Gas CCS'])
         
     def plotAttr(self, res_type, res_attr):
         

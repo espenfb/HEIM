@@ -96,6 +96,25 @@ class metaModel(object):
             
         r.T.plot(kind = plotType)
         
+    def getTotalEmissions(self):
+        out = pd.DataFrame()
+        for n, res in enumerate(self.res):
+            param = self.param_range[n]
+            out.loc[param, 'Emissions [ton CO2]'] = res.emissionByType().sum() +\
+            res.emissionFromH2()
+        return out
+    
+    def plotTotalEmissions(self, figure_name = None):
+        ''' Plots total CO2 emissions for the system in tons. '''
+        
+        emissions = self.getTotalEmissions()
+        #if figure_name != None:
+        plt.figure(figure_name)
+        ax = plt.gca()
+        (emissions/1E3).plot(ax = ax)
+#        else:
+#            (out/1E3).plot()
+        
         
     def getPriceStats(self):
         
