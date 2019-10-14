@@ -9,6 +9,9 @@ import pandas as pd
 from shapely.geometry import Point
 import geopandas as gpd
 import numpy as np
+import copy
+
+
 
 filename = 'ERCOT_onshore_2015.CSV'
 
@@ -98,6 +101,33 @@ wind_profiles = wind_profiles.round(2)
 wind_profiles.index.name = None
 
 wind_profiles.to_csv('wind_profiles_bus_all_types.csv')
+
+
+########### adjusted ##############
+
+
+nrel_resource_pot = pd.DataFrame()
+nrel_resource_pot.loc['Wind','Capacity'] = 1200 #GW 
+nrel_resource_pot.loc['Wind','Energy'] = 4400 #TWh
+nrel_resource_pot.loc['Solar','Capacity'] = 20400 #GW
+nrel_resource_pot.loc['Solar','Energy'] = 41300 #TWh
+
+installed_cap = pd.read_csv('..\\..\\production_capacity\\installed_cap_needs.csv', index_col = [0])
+installed_cap.Wind
+
+idx = pd.IndexSlice
+remaining_wind_pot = nrel_resource_pot.loc['Wind','Capacity']*1E3 - installed_cap.Wind.sum()
+wind_profiles_adj = copy.copy(wind_profiles)
+wind_profiles_pot = wind_profiles_adj.loc[idx[:],idx[:,'Pot_cap']]
+wind_profiles_adj.loc[idx[:],idx[:,'Pot_cap']] = (wind_profiles_pot/wind_profiles_pot.sum(axis = 1).max())*remaining_wind_pot
+wind_profiles_adj_norm = wind_profiles_adj/wind_profiles_adj.max()
+wind_profiles_adj_norm.loc[:,(3,'Inst_cap')] = wind_profiles_adj_norm[(3,'Pot_cap')]
+wind_profiles_adj_norm.sort_index(axis = 1, inplace = True)
+wind_profiles_adj_norm.to_csv('wind_profiles_adj.csv')
+
+wind_cap_adj = wind_profiles_adj.max().unstack().round(-1)
+wind_cap_adj['Inst_cap'] = installed_cap.Wind
+wind_cap_adj.to_csv('wind_cap_adj.csv')
 
 inst_cap = pd.read_csv('..\\..\\production_capacity\\Installed_cap.csv',
                        index_col = 0, skiprows = [0,2])

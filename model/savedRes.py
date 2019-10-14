@@ -40,7 +40,8 @@ class savedRes(object):
         self.type_identifier = {'HS': 'H2_Storage', 'B': 'Bio', 'S': 'Solar',
                            'N': 'Nuclear', 'E': 'Elec', 'C': 'Coal',
                            'CCG': 'CC Gas', 'CTG': 'CT Gas', 'ICEG': 'ICE Gas',
-                            'CCSG': 'CCS Gas', 'W': 'Wind'}
+                            'CCSG': 'CCS Gas', 'W': 'Wind', 'CCSC': 'CCS Coal',
+                            'ESP': 'Battery', 'ESE': 'Battery Energy'}
         
         self.plant_inv.sort_index(axis = 1, inplace = True)
         self.addGeoBus()
@@ -59,6 +60,12 @@ class savedRes(object):
                 else: 
                     res.loc[item_type,c] += self.plant_inv.loc[i,c]
             out = pd.concat([out,res], axis = 1)
+            
+        # Filter elements with only marginal installed capacities
+        con1 = out.Init_cap > 0    
+        con2 = out.new_cap > 1
+        out = out[con1|con2]
+        
         return out
     
     def invByBus(self):
@@ -67,20 +74,27 @@ class savedRes(object):
         out = pd.DataFrame(columns = self.plant_inv.columns,
                            index =  pd.MultiIndex.from_product([indx_1,
                                                                 indx_2]))
-        for b in self.bus.columns.levels[0]:
-            for t in self.type_identifier.keys():
-                if t == 'H2_Storage':
-                    continue  
-                for c in self.plant_inv.columns:
-                    indx = '%s%.2d' % (t,int(b))
-                    out.loc[(int(b),self.type_identifier[t]), c] = self.plant_inv.loc[indx,c]
+        for indx in self.plant_inv.index:
+            b = int(indx[-2:])
+            t = indx[:-2]
+            if t == 'HS' or t == 'ESE':
+                continue
+
+            for c in self.plant_inv.columns:
+                out.loc[(b,self.type_identifier[t]), c] = self.plant_inv.loc[indx,c]
                     
         out = out[out.sum(axis = 1) != 0]
 #        out.drop(labels = 'H2_Storage', level = 1, inplace = True)
         out.sort_index(level = 0, inplace = True)
+        
+        # Filter elements with only marginal installed capacities
+        con1 = out.Init_cap > 0    
+        con2 = out.new_cap > 1
+        out = out[con1|con2]
+        
         return out
     
-    def energyByType(self):
+    def energySumByType(self):
         
         res = pd.DataFrame()
         for i in self.plant.columns.levels[0]:
@@ -95,9 +109,24 @@ class savedRes(object):
                         res.loc[item_type,c] += self.plant[i,c].sum()
         return res
     
+    
+    def energyByType(self):
+        
+        idx = pd.IndexSlice
+        res = pd.DataFrame()
+        for i in self.plant.columns.levels[0]:
+            item_type = self.type_identifier[i[:-2]]
+            if not item_type in res.columns:
+                res[item_type] = self.plant[i,'prod']
+            else:
+                res[item_type] += self.plant[i,'prod']
+        
+        return res
+    
+    
     def emissionByType(self):
-        prod = self.energyByType()['prod']
-        emission_coeff = self.data.emission.set_index('Type').Emission
+        prod = self.energySumByType()['prod']
+        emission_coeff = self.data.plant_char.set_index('PlantType')['Emission (kg/MWh)']
         emission_coeff.rename({'Biomass':'Bio'}, inplace = True)
         
         return prod*emission_coeff
@@ -107,9 +136,9 @@ class savedRes(object):
         ng_hydrogen = self.getH2SourceBus().sum()['Natural Gas']
         return e_rate*ng_hydrogen
     
-    def plotEnergyByType(self):
-        energyByType = self.energyByType()
-        energyByType.plot(kind = 'bar')
+    def plotenergySumByType(self):
+        energySumByType = self.energySumByType()
+        energySumByType.plot(kind = 'bar')
     
     def plotInvByType(self, plotType = 'bar', subplots = False):
         
@@ -118,13 +147,16 @@ class savedRes(object):
         
         plt.figure('Investments')
         ax = plt.gca()
-        inv_by_type.loc[inv_by_type.index.drop('H2_Storage')].plot(
-                kind = plotType, subplots = subplots, ax = ax)
+        
+        if 'H2_Storage' in inv_by_type.index:
+            inv_by_type = inv_by_type.loc[inv_by_type.index.drop('H2_Storage')]
+            
+        inv_by_type.plot(kind = plotType, subplots = subplots, ax = ax)
         
     def plotInvByBus(self):
         
         df = self.invByBus()
-        df.retired_cap = df.retired_cap*-1 
+        df.Init_cap = df.Init_cap - df.retired_cap
         ncols = len(df.index.levels[0])
         #plotting
         fig, axes = plt.subplots(nrows=1,

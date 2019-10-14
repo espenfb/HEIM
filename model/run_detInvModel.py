@@ -11,12 +11,12 @@ import savedRes as sr
 
 time_data = {
 'start_date': pd.Timestamp(year = 2015, month = 1, day = 1),
-'end_date': pd.Timestamp(year = 2015, month = 2, day = 1),
+'end_date': pd.Timestamp(year = 2015, month = 1, day = 31),
 'ref_date': pd.Timestamp(year = 2015, month = 1, day = 1)}
 dirs = {
 'data_dir' : "Data\\",
 'ctrl_data_file' : 'ctrl_data.csv',
-'res_dir' : 'Result_test\\'}
+'res_dir' : 'Result_test_integer\\'}
 obj = dim.deterministicModel(time_data, dirs)
 
 obj.solve()
@@ -25,6 +25,6 @@ obj.solve()
 #
 obj.processResults()
 
-obj.saveRes('Result_test\\')
+obj.saveRes(dirs['res_dir'])
 
-res = sr.savedRes('Result_test\\', data = obj.data)
+res = sr.savedRes(dirs['res_dir'], data = obj.data)

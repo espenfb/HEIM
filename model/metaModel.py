@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 class metaModel(object):
     
     
-    def __init__(self, time_data, dirs):
+    def __init__(self, time_data, dirs, meta_data):
         
         # Times
         for k in time_data.keys():
@@ -24,28 +24,29 @@ class metaModel(object):
         # Directories
         for k in dirs.keys():
             setattr(self, k, dirs[k])
+            
+        # Meta data
+        for k in meta_data.keys():
+            setattr(self, k, meta_data[k])
         
         self.model = dim.deterministicModel(time_data, dirs)
         
         
         
-    def runMetaModel(self, param_type, param, param_range,
+    def runMetaModel(self, 
                      orientation = 'col', key_col = None, col_value = None):
         
-        self.param = param
-        self.param_range = param_range
-        
         if orientation == 'col':
-            self.param_type = getattr(self.model.data, param_type)
+            self.type = getattr(self.model.data, self.type)
         elif orientation == 'row':
-            self.param_type = getattr(self.model.data, param_type)
-            key_row = (getattr(self.param_type, key_col) == param)
+            self.type = getattr(self.model.data, self.type)
+            key_row = (getattr(self.type, key_col) == self.param)
             indx = self.param_type.index[key_row]
         
-        for i in param_range:
+        for i in self.range:
             
             if orientation == 'col':
-                setattr(self.param_type, param, i)
+                setattr(self.param_type, self.param, i)
             elif orientation == 'row':
                 self.param_type.loc[indx,col_value] = i
             
@@ -55,13 +56,13 @@ class metaModel(object):
     
             self.model.processResults()
     
-            self.model.saveRes(self.res_dir + 'Result' + '_' + param + '_' + str(i) + '\\')
+            self.model.saveRes(self.res_dir + 'Result' + '_' + self.param + '_' + str(i) + '\\')
             
     def loadRes(self):
         
         self.res = []
         
-        for i in self.param_range:
+        for i in self.range:
             
             self.res.append(sr.savedRes(self.res_dir + 'Result' + '_' +
                                         self.param + '_' + str(i) + '\\',
@@ -73,7 +74,7 @@ class metaModel(object):
         
         r = pd.DataFrame()
         for n, i in enumerate(self.res):
-            param_val = np.round(self.param_range[n],4)
+            param_val = np.round(self.range[n],4)
             r[param_val] = i.getH2SourceBus().sum()
         
         r[r < 0] = 0
@@ -83,23 +84,23 @@ class metaModel(object):
     def plotInvByType(self, plotType = 'bar'):
         r = pd.DataFrame()
         for n, i in enumerate(self.res):
-            param_val = np.round(self.param_range[n],4)
-            r[param_val] = i.invByType().T.sum().drop('H2_Storage')
+            param_val = np.round(self.range[n],4)
+            r[param_val] = i.invByType().T.sum().drop(['H2_Storage', 'Battery Energy'])
             
         r.T.plot(kind = plotType) 
         
-    def plotEnergyByType(self, plotType = 'bar'):
+    def plotenergySumByType(self, plotType = 'bar'):
         r = pd.DataFrame()
         for n, i in enumerate(self.res):
-            param_val = np.round(self.param_range[n],4)
-            r[param_val] = i.energyByType()['prod']
+            param_val = np.round(self.range[n],4)
+            r[param_val] = i.energySumByType()['prod']
             
         r.T.plot(kind = plotType)
         
     def getTotalEmissions(self):
         out = pd.DataFrame()
         for n, res in enumerate(self.res):
-            param = self.param_range[n]
+            param = self.range[n]
             out.loc[param, 'Emissions [ton CO2]'] = res.emissionByType().sum() +\
             res.emissionFromH2()
         return out
@@ -121,7 +122,7 @@ class metaModel(object):
         out_mean = pd.DataFrame()
         out_std = pd.DataFrame()
         for n, res in enumerate(self.res):
-            param = self.param_range[n]
+            param = self.range[n]
             for b in res.bus.columns.levels[0]:
                 out_mean.loc[int(b),param] = res.bus[b]['nodal_price'].mean()
                 out_std.loc[int(b),param] = res.bus[b]['nodal_price'].std()

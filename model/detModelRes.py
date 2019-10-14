@@ -24,6 +24,12 @@ def processDetRes(obj, model):
     obj.res['plant_inv'][str(model.retired_cap)] = pd.DataFrame.from_dict(model.retired_cap.get_values(),
                               orient = 'index', columns = [str(model.retired_cap)])
     
+    con1 = obj.res['plant_inv'].new_cap > 0.1
+    con2 = obj.res['plant_inv'].Init_cap > 0.1
+    obj.res['plant_inv'] = obj.res['plant_inv'][con1|con2]
+    obj.res['plant_inv'] = obj.res['plant_inv'].round(decimals = 1)
+    
+    
     obj.res['line_inv'] = pd.DataFrame.from_dict(model.new_branch_cap.get_values(),
                               orient = 'index', columns = [str(model.new_branch_cap)])
     cap = pd.DataFrame(model.Trans_cap.iteritems(), columns = ['Index','MaxCap'])
@@ -32,11 +38,6 @@ def processDetRes(obj, model):
     obj.res['line_inv']['From'] = [i[1] for i in obj.res['line_inv'].index]
     obj.res['line_inv']['To'] = [i[2] for i in obj.res['line_inv'].index]
     obj.res['line_inv']['Cap'] = obj.res['line_inv']['new_branch_cap']*obj.res['line_inv']['MaxCap']
-    
-    
-#    obj.res['line_inv'].index = [i[0] for i in model.new_branch_cap.get_values()]
-#    obj.res['line_inv']['from'] = [i[1] for i in model.new_branch_cap.get_values()]
-#    obj.res['line_inv']['to'] = [i[2] for i in model.new_branch_cap.get_values()]
     
     prod = pd.DataFrame.from_dict(model.prod.get_values(),
                                  orient = 'index', columns = [str(model.prod)])
@@ -54,12 +55,12 @@ def processDetRes(obj, model):
     
     # Get time dependent hydrogen results
     hydrogen_direct = rt.timeVarToDict(model, model.hydrogen_direct, model.HYDROGEN_PLANTS)
-    hydrogen_to_storage = rt.timeVarToDict(model, model.hydrogen_to_storage, model.HYDROGEN_PLANTS)
-    hydrogen_from_storage = rt.timeVarToDict(model, model.hydrogen_from_storage, model.HYDROGEN_PLANTS)
+    hydrogen_to_storage = rt.timeVarToDict(model, model.to_storage, model.HYDROGEN_PLANTS)
+    hydrogen_from_storage = rt.timeVarToDict(model, model.from_storage, model.HYDROGEN_PLANTS)
     hydrogen_import = rt.timeVarToDict(model, model.hydrogen_import, model.HYDROGEN_PLANTS)
     hydrogen_import_ccs = rt.timeVarToDict(model, model.hydrogen_import_ccs, model.HYDROGEN_PLANTS)
     storage_level = rt.timeVarToDict(model, model.storage_level, model.HYDROGEN_PLANTS)
-    storageCap_dual = rt.timeDualToDict(model, model.storageCap, model.HYDROGEN_PLANTS)
+    storageCap_dual = rt.timeDualToDict(model, model.storageEnergyCap, model.HYDROGEN_PLANTS)
     storage_value = rt.timeDualToDict(model, model.storageBalance, model.HYDROGEN_PLANTS)
     hydrogen_price = rt.timeDualToDict(model, model.hydrogenBalance, model.HYDROGEN_PLANTS)
     obj.res['hydrogen'] = pd.DataFrame()
@@ -78,7 +79,24 @@ def processDetRes(obj, model):
         obj.res['hydrogen'] = pd.concat([obj.res['hydrogen'],data_entry], axis = 1)
     if len(obj.res['hydrogen'].index) > 0:
         obj.res['hydrogen'].index = timeindex
-    
+        
+        
+     # Get time dependent battery results
+    to_storage = rt.timeVarToDict(model, model.to_storage, model.BATTERY_PLANTS)
+    from_storage = rt.timeVarToDict(model, model.from_storage, model.BATTERY_PLANTS)
+    storage_level = rt.timeVarToDict(model, model.storage_level, model.BATTERY_PLANTS)
+    obj.res['battery'] = pd.DataFrame()
+    for i in model.BATTERY_PLANTS:
+        data_entry = pd.DataFrame()
+        data_entry['to_storage'] = pd.Series(to_storage[i])
+        data_entry['from_storage'] = pd.Series(from_storage[i])
+        data_entry['storage_level'] = pd.Series(storage_level[i])
+        data_entry.columns = pd.MultiIndex.from_product([[i],data_entry.columns])
+        obj.res['battery'] = pd.concat([obj.res['battery'],data_entry], axis = 1)
+    if len(obj.res['battery'].index) > 0:
+        obj.res['battery'].index = timeindex
+        
+
     # Get time dependent node results
     exp = rt.timeVarToDict(model, model.exp, model.NODES)
     imp = rt.timeVarToDict(model, model.imp, model.NODES)
@@ -158,19 +176,20 @@ def saveDetRes(obj, save_dir):
     obj.res['line_inv'].to_csv(obj.save_dir + 'line_inv.csv', sep = ',')
     obj.res['plant'].to_csv(obj.save_dir + 'plant.csv', sep = ',')
     obj.res['hydrogen'].to_csv(obj.save_dir + 'hydrogen.csv', sep = ',')
+    obj.res['battery'].to_csv(obj.save_dir + 'battery.csv', sep = ',')
     obj.res['bus'].to_csv(obj.save_dir + 'bus.csv', sep = ',')
 #    obj.res['hydro_power'].to_csv(obj.save_dir + 'hydro_power.csv', sep = ',')
     obj.res['wind_power'].to_csv(obj.save_dir + 'wind_power.csv', sep = ',')
     obj.res['branch_flow'].to_csv(obj.save_dir + 'flow.csv', sep = ',')
 #    obj.res['penalty'].to_csv(obj.save_dir + 'penalty.csv', sep = ',')
     
-def importDetRes(self, import_dir):
-    
-    self.imp_res = {}
-    
-    self.imp_res['hydrogen'] = pd.DataFrame().from_csv(import_dir + "hydrogen.csv", header = [0,1])
-    self.imp_res['bus'] = pd.DataFrame().from_csv(import_dir + "bus.csv", header = [0,1])
-#    self.imp_res['hydro_power'] = pd.DataFrame().from_csv(import_dir + "hydro_power.csv", header = [0,1])
-    self.imp_res['wind_power'] = pd.DataFrame().from_csv(import_dir + "wind_power.csv", header = [0,1])
-    self.imp_res['flow'] = pd.DataFrame().from_csv(import_dir + "flow.csv")
-#    self.imp_res['penalty'] = pd.DataFrame().from_csv(import_dir + "penalty.csv")
+#def importDetRes(self, import_dir):
+#    
+#    self.imp_res = {}
+#    
+#    self.imp_res['hydrogen'] = pd.DataFrame().from_csv(import_dir + "hydrogen.csv", header = [0,1])
+#    self.imp_res['bus'] = pd.DataFrame().from_csv(import_dir + "bus.csv", header = [0,1])
+##    self.imp_res['hydro_power'] = pd.DataFrame().from_csv(import_dir + "hydro_power.csv", header = [0,1])
+#    self.imp_res['wind_power'] = pd.DataFrame().from_csv(import_dir + "wind_power.csv", header = [0,1])
+#    self.imp_res['flow'] = pd.DataFrame().from_csv(import_dir + "flow.csv")
+##    self.imp_res['penalty'] = pd.DataFrame().from_csv(import_dir + "penalty.csv")

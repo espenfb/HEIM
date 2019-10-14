@@ -4,7 +4,6 @@ Created on Tue Apr  2 22:46:34 2019
 
 @author: espenfb
 """
-
 import pandas as pd
 import numpy as np
 
@@ -64,6 +63,27 @@ solar_cap.loc[:,'Inst cap'] = 0
 solar_cap.to_csv('solar_cap.csv')
 
 solar_profiles.to_csv('solar_profiles_bus.csv')
+
+nrel_resource_pot = pd.DataFrame()
+nrel_resource_pot.loc['Wind','Capacity'] = 1200 #GW 
+nrel_resource_pot.loc['Wind','Energy'] = 4400 #TWh
+nrel_resource_pot.loc['Solar','Capacity'] = 20400 #GW
+nrel_resource_pot.loc['Solar','Energy'] = 41300 #TWh
+
+installed_cap = pd.read_csv('..\\..\\production_capacity\\installed_cap_needs.csv', index_col = [0])
+installed_cap_solar = installed_cap['Solar']
+
+remaining_solar = nrel_resource_pot.loc['Solar','Capacity']*1E3 - installed_cap_solar.sum()
+solar_profiles[7] = solar_profiles[8] 
+solar_profiles_adj = (solar_profiles/solar_profiles.sum(axis = 1).max())*remaining_solar 
+solar_cap_adj = solar_profiles_adj.max().to_frame('Pot cap')
+solar_cap_adj['Inst cap'] = installed_cap_solar
+solar_cap_adj.to_csv('solar_cap_adj.csv')
+
+solar_profiles_adj_norm = (solar_profiles_adj/solar_profiles_adj.max())
+solar_profiles_adj_norm[7] = solar_profiles_adj_norm[8]
+solar_profiles_adj_norm.sort_index(axis =1, inplace = True)
+solar_profiles_adj_norm.to_csv('solar_profiles_adj.csv')
 
 inst_cap = pd.read_csv('..\\..\\production_capacity\\Installed_cap.csv',
                        index_col = 0)
