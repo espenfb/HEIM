@@ -112,7 +112,6 @@ class savedRes(object):
     
     def energyByType(self):
         
-        idx = pd.IndexSlice
         res = pd.DataFrame()
         for i in self.plant.columns.levels[0]:
             item_type = self.type_identifier[i[:-2]]
@@ -120,6 +119,8 @@ class savedRes(object):
                 res[item_type] = self.plant[i,'prod']
             else:
                 res[item_type] += self.plant[i,'prod']
+                
+        res.index = self.plant.index
         
         return res
     
@@ -385,4 +386,23 @@ class savedRes(object):
         
         
             
+    def plotEnergyByType(self):
+        self.energyByType().plot(kind = 'area')
+        
+    def plotTotalProd(self):
+        idx = pd.IndexSlice
+        total_prod = self.plants.loc[idx[:],idx[:,'prod']].sum(axis = 1)
+        total_prod.plot()
+        
+        
+    def plotTotalElectricLoad(self):
+        load = self.data.load_series
+        load = load[load.index.isin(self.time)]
+        total_load = load.sum(axis = 1)
+        total_load.plot()
+        
+    
+        
+    
+        
         

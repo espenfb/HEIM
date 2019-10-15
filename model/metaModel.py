@@ -33,22 +33,9 @@ class metaModel(object):
         
         
         
-    def runMetaModel(self, 
-                     orientation = 'col', key_col = None, col_value = None):
-        
-        if orientation == 'col':
-            self.type = getattr(self.model.data, self.type)
-        elif orientation == 'row':
-            self.type = getattr(self.model.data, self.type)
-            key_row = (getattr(self.type, key_col) == self.param)
-            indx = self.param_type.index[key_row]
+    def runMetaModel(self):
         
         for i in self.range:
-            
-            if orientation == 'col':
-                setattr(self.param_type, self.param, i)
-            elif orientation == 'row':
-                self.param_type.loc[indx,col_value] = i
             
             self.model.buildModel()
             

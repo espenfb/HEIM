@@ -91,6 +91,7 @@ class deterministicModel(object):
                                  "Crossover": 0})
 
         self.solution_time = time.time()-start_time
+        pd.DataFrame.from_dict({'sol_time':[self.solution_time]}).to_csv(self.res_dir + 'sol_time.csv')
         
     def printModel(self, name = 'detInvModel.txt'):
         
@@ -612,7 +613,7 @@ def detData(obj):
     
     load_series = copy.copy(obj.data.load_series)
     load_series.columns = [obj.type2prefix['Load'] + '%.2d' % int(i) for i in load_series.columns]
-    load_series = load_series[load_series.index.isin(obj.time)]#*1.15
+    load_series = load_series[load_series.index.isin(obj.time)]
     load_series.index = list(obj.timerange)
     
     
