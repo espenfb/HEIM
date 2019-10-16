@@ -28,7 +28,7 @@ class savedRes(object):
     def __init__(self, folder, data = None):
     
         for file in os.listdir(folder):
-            if file[:-4] == 'plant_inv' or file[:-4] == 'line_inv':
+            if file[:-4] == 'plant_inv' or file[:-4] == 'line_inv' or file[:-4] == 'sol_time':
                 df = pd.read_csv(folder + file, index_col = 0, header = [0]).replace(np.NaN,0)
             else:
                 df = pd.read_csv(folder + file, index_col = 0, header = [0,1]).replace(np.NaN,0)
@@ -389,17 +389,83 @@ class savedRes(object):
     def plotEnergyByType(self):
         self.energyByType().plot(kind = 'area')
         
-    def plotTotalProd(self):
-        idx = pd.IndexSlice
-        total_prod = self.plants.loc[idx[:],idx[:,'prod']].sum(axis = 1)
-        total_prod.plot()
+    def getTotalProd(self):
         
+        idx = pd.IndexSlice
+        total_prod = self.plant.loc[idx[:],idx[:,'prod']].sum(axis = 1)
+        total_prod = total_prod.to_list()
+        return total_prod
+        
+    def plotTotalProd(self):
+        
+        total_prod = self.getTotalProd()
+        plt.plot(total_prod)
+        
+    def getTotalElectricLoad(self):
+        load = self.data.load_series
+        load = load[load.index.isin(self.bus.index)]
+        total_load = load.sum(axis = 1).to_list()
+        return total_load
         
     def plotTotalElectricLoad(self):
-        load = self.data.load_series
-        load = load[load.index.isin(self.time)]
-        total_load = load.sum(axis = 1)
-        total_load.plot()
+        
+        total_load = self.getTotalElectricLoad()
+        plt.plot(total_load)
+        
+    
+    def getNetEnergyStorage(self):
+        
+        idx = pd.IndexSlice
+        
+        battery_in_ratio = self.data.parameters['battery_in_ratio'].values[0]
+        battery_out_ratio = self.data.parameters['battery_out_ratio'].values[0]
+        
+        indx = np.arange(len(self.bus.index))
+        
+        to_storage = self.battery.loc[idx[:], idx[:,'to_storage']].sum(axis = 1)*battery_in_ratio
+        to_storage.index = indx
+        from_storage = self.battery.loc[idx[:], idx[:,'from_storage']].sum(axis = 1)*battery_out_ratio
+        from_storage.index = indx
+        
+        net_storage = to_storage - from_storage
+        
+        return net_storage
+        
+
+    def plotEnergyBalance(self):
+        
+        self.plotTotalProd()
+        total_load = self.getTotalElectricLoad()
+        
+        indx = np.arange(len(total_load))
+        
+        net_storage = self.getNetEnergyStorage()
+        
+        to_storage_adj = [max(i,0) for i in net_storage]
+        from_storage_adj = [abs(min(i,0)) for i in net_storage]
+        
+        load_minus = [total_load[i] - from_storage_adj[i] for i in indx]
+        
+        load_plus = [total_load[i] + to_storage_adj[i] for i in indx]
+        
+        ax = plt.gca()
+        
+        ax.fill_between(indx,total_load, load_minus, color = 'g')
+        ax.fill_between(indx,total_load, load_plus, color = 'b')
+        
+    def plotTotalLoadDuration(self):
+        
+        total_load = self.getTotalElectricLoad()
+        
+        net_storage = self.getNetEnergyStorage()
+        
+        total_load_and_storage = total_load + net_storage
+        
+        plt.plot(np.sort(total_load)[::-1], color = 'b')
+        plt.plot(np.sort(total_load_and_storage)[::-1], color = 'r')
+        
+        
+        
         
     
         

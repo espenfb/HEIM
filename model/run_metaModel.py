@@ -16,26 +16,14 @@ time_data = {
 dirs = {
 'data_dir' : "Data\\",
 'ctrl_data_file' : 'ctrl_data.csv',
-'res_dir' : 'Meta_results_uc_year\\'}
+'res_dir' : 'Meta_results_uc_2\\'}
 meta_data = {'type': 'parameters',
              'param': 'CO2_cost',
-             'range': np.arange(0.00,0.29,0.03)} 
+             'range': np.arange(0.03,0.29,0.03)} 
 
 obj = mm.metaModel(time_data, dirs, meta_data)
 
 
-#param_type = 'inv_cost'
-#param = 'H2_Storage'
-#param_range = np.arange(0.23,0.28,0.005)
-
-#obj.runMetaModel(orientation = 'row',
-#                 key_col = 'Type', col_value = 'Cost')
-
-#param_type = 'parameters'
-#param = 'CO2_cost'
-#param_range = np.arange(0.00,0.29,0.03)
-
-
-obj.runMetaModel()
+#obj.runMetaModel()
 
 obj.loadRes()

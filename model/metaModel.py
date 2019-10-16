@@ -29,21 +29,23 @@ class metaModel(object):
         for k in meta_data.keys():
             setattr(self, k, meta_data[k])
         
-        self.model = dim.deterministicModel(time_data, dirs)
-        
-        
+        self.model = dim.deterministicModel(time_data, dirs,
+                                            mutables = {self.param: True})
         
     def runMetaModel(self):
         
         for i in self.range:
             
-            self.model.buildModel()
+            setattr(self.model.detModelInstance, self.param, i)
+            print('Solving for ', self.param, ' = ', getattr(self.model.detModelInstance, self.param).value)
             
             self.model.solve()
     
             self.model.processResults()
     
             self.model.saveRes(self.res_dir + 'Result' + '_' + self.param + '_' + str(i) + '\\')
+            
+            
             
     def loadRes(self):
         
@@ -76,7 +78,15 @@ class metaModel(object):
             
         r.T.plot(kind = plotType) 
         
-    def plotenergySumByType(self, plotType = 'bar'):
+    def plotStorageEnergy(self):
+        
+        r = pd.DataFrame()
+        for n, i in enumerate(self.res):
+            param_val = np.round(self.range[n],4)
+            r[param_val] = i.invByType().T.sum().loc[['H2_Storage', 'Battery Energy']]
+        
+        
+    def plotEnergySumByType(self, plotType = 'bar'):
         r = pd.DataFrame()
         for n, i in enumerate(self.res):
             param_val = np.round(self.range[n],4)

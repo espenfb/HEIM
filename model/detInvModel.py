@@ -23,7 +23,7 @@ class deterministicModel(object):
     ''' Deterministic model for regional power system with hydogen loads,
     wind power and hydro power. '''
     
-    def __init__(self, time_data, dirs):
+    def __init__(self, time_data, dirs, mutables = {}):
          
         
         # Times
@@ -33,7 +33,8 @@ class deterministicModel(object):
         # Directories
         for k in dirs.keys():
             setattr(self, k, dirs[k])
-        
+            
+        self.mutables = mutables
         # Import system data
         self.data = sd.systemData(dirs)
         wind = self.data.wind_series
@@ -54,8 +55,8 @@ class deterministicModel(object):
         
     def buildModel(self):
         
-        print('Building deterministic operation model...')
-        self.detModel = buildDetModel()
+        print('Building deterministic investment model...')
+        self.detModel = buildDetModel(mutables = self.mutables)
     
         # Create concrete instance
         self.detDataInstance = detData(self)
@@ -71,7 +72,7 @@ class deterministicModel(object):
     def solve(self, printOutput = True):
         
         # Connect to solver
-        self.opt = pe.SolverFactory('gurobi', solver_io='python', verbose = True)
+        self.opt = pe.SolverFactory('gurobi', solver_io='python')#, verbose = True)
         #self.opt.options["Method"] = 2 #Chooses the interior point method 
         #opt.options["NodeMethod"] = 2 #Chooses the interior point method 
         #self.opt.options["Crossover"] = 0 #Turn off the crossover after the interior point method
@@ -86,12 +87,10 @@ class deterministicModel(object):
                         tee=printOutput, #stream the solver output
                         keepfiles=False, #print the LP file for examination
                         symbolic_solver_labels=True,
-                        options={"QCPDual": 0,
-                                 "Method": 2,
+                        options={"Method": 2,
                                  "Crossover": 0})
 
         self.solution_time = time.time()-start_time
-        pd.DataFrame.from_dict({'sol_time':[self.solution_time]}).to_csv(self.res_dir + 'sol_time.csv')
         
     def printModel(self, name = 'detInvModel.txt'):
         
@@ -135,6 +134,8 @@ class deterministicModel(object):
         self.save_dir = save_dir
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
+            
+        pd.DataFrame.from_dict({'sol_time':[self.solution_time]}).to_csv(save_dir + 'sol_time.csv')
 
         dmr.saveDetRes(self,save_dir)
         
@@ -143,7 +144,14 @@ class deterministicModel(object):
         
         dmr.importDetRes(self, import_dir)
 
-def buildDetModel():
+def buildDetModel(mutables = {}):
+    
+        mutable_dict = {'inv_cost': False,
+                        'CO2_cost': True}
+        
+        for i in mutables.keys():
+            mutable_dict[i] = mutables[i]
+        
         m = pe.AbstractModel('detModel')
         
         ##Sets##
@@ -212,13 +220,13 @@ def buildDetModel():
         m.Period_ratio = pe.Param(within = pe.NonNegativeReals)
         
         m.Rationing_cost = pe.Param(within = pe.NonNegativeReals)
-        m.CO2_cost = pe.Param(within = pe.NonNegativeReals)
+        m.CO2_cost = pe.Param(within = pe.NonNegativeReals, mutable = mutable_dict['CO2_cost' ])
         
         m.Load = pe.Param(m.TIME, m.LOAD, within = pe.NonNegativeReals)
         m.H2_load = pe.Param(m.TIME, m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         
         m.Emission_coef = pe.Param(m.THERMAL_PLANT_TYPES, within = pe.NonNegativeReals)
-        m.Inv_cost = pe.Param(m.PLANT_TYPES, within = pe.NonNegativeReals)
+        m.Inv_cost = pe.Param(m.PLANT_TYPES, within = pe.NonNegativeReals, mutable = mutable_dict['inv_cost'])
         m.Fixed_cost = pe.Param(m.PLANT_TYPES, within = pe.NonNegativeReals)
         m.Var_cost = pe.Param(m.THERMAL_PLANT_TYPES, within = pe.NonNegativeReals)
         m.Retirement_cost = pe.Param(m.THERMAL_PLANT_TYPES, within = pe.NonNegativeReals)
@@ -309,12 +317,19 @@ def buildDetModel():
 #            return m.gen_state[t,i] == m.gen_state[t-1,i] + m.start_up[t,i] - m.shut_down[t,i] 
 #        m.startUp = pe.Constraint(m.TIME,m.THERMAL_POWER_PLANTS, rule = startUp_rule)
         
-        def rampLimit_rule(m,t,i):
+        def rampUpLimit_rule(m,t,i):
             if pe.value(t) > 0:
                 return m.prod[t,i] - m.prod[t-1,i] <= m.Ramp_rate[i]*m.gen_state[t,i]
             else:
                 return pe.Constraint.Skip
-        m.rampLimit = pe.Constraint(m.TIME,m.THERMAL_POWER_PLANTS, rule = rampLimit_rule)
+        m.rampUpLimit = pe.Constraint(m.TIME,m.THERMAL_POWER_PLANTS, rule = rampUpLimit_rule)
+        
+        def rampDownLimit_rule(m,t,i):
+            if pe.value(t) > 0:
+                return m.prod[t-1,i] - m.prod[t,i] <= m.Ramp_rate[i]*m.gen_state[t,i]
+            else:
+                return pe.Constraint.Skip
+        m.rampDownLimit = pe.Constraint(m.TIME,m.THERMAL_POWER_PLANTS, rule = rampDownLimit_rule)
             
 #        def uptime_rule(m,t,i):
 #            
