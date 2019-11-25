@@ -11,6 +11,7 @@ import savedRes as sr
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 class metaModel(object):
     
@@ -33,6 +34,8 @@ class metaModel(object):
                                             mutables = {self.param: True})
         
     def runMetaModel(self):
+        
+        self.model.buildModel()
         
         for i in self.range:
             
@@ -138,3 +141,80 @@ class metaModel(object):
         ax = plt.gca()
         price_std.sort_index().T.plot(ax = ax)
         
+    def getStorageDuration(self):
+        
+        r = pd.DataFrame()
+        for p,res in zip(self.range,self.res):
+            for i in res.plant_inv.index:
+                n = i[-2:]
+                if i[:-2] == 'ESP':
+                    r.loc[int(n),p] = res.plant_inv.loc['ESE'+n].sum()/res.plant_inv.loc['ESP'+n].sum()
+        return r
+        
+    def plotBatteryStorageDuration(self):
+        
+        plt.figure()
+        dur = self.getStorageDuration()
+        dur.plot(kind = 'hist', alpha = 0.5, fontsize = 14)
+        
+        ax = plt.gca()
+        ax.set_ylabel('Numbers of Batteries', fontsize = 14)
+        ax.set_xlabel('Relative storage [Hours]', fontsize = 14)
+        
+    def getHydrogenStorageDuration(self):
+        
+        r = pd.DataFrame()
+        for p,res in zip(self.range,self.res):
+            for i in res.plant_inv.index:
+                n = i[-2:]
+                if i[:-2] == 'HS'and ('E'+n) in res.plant_inv.index:
+                    r.loc[int(n),p] = res.plant_inv.loc['HS'+n].sum()/res.plant_inv.loc['E'+n].sum()
+ 
+        return r
+
+    def plotHydrogenStorageDurationHist(self):
+        
+        plt.figure()
+        dur = self.getStorageDuration()
+        dur.plot(kind = 'hist', alpha = 0.5, fontsize = 14)
+        
+        ax = plt.gca()
+        ax.set_ylabel('Numbers of Storage Tanks', fontsize = 14)
+        ax.set_xlabel('Relative storage [Hours]', fontsize = 14)
+        
+    def plotHydrogenStorageDurationHeat(self):
+        
+        plt.figure()
+        dur = self.getStorageDuration()
+        sns.set(font_scale=1.4)
+        sns.heatmap(dur,cmap=sns.diverging_palette(220, 10, as_cmap=True),
+                    cbar_kws={'label': 'Battery Duration [H]'})
+        
+        ax = plt.gca()
+        ax.set_ylabel('Bus nr.', fontsize = 14)
+        ax.set_xlabel('CO2 price [$/kg]', fontsize = 14)
+    
+    def getBatteryInv(self):
+        
+        bat = []
+        for res in self.res:
+            bat.append(res.invByType().loc['Battery','new_cap'])
+            
+        return bat
+  
+    def getHydrogenStorage(self):
+        
+        h2_storage = []
+        for res in self.res:
+            h2_plant = res.data.hydrogen_plant_char.set_index('Type')
+            en_rate = h2_plant.loc['Elec','Energy rate [MWh/kg]']
+            h2_storage.append(res.invByType().loc['H2_Storage','new_cap']*en_rate )
+            
+        return h2_storage
+        
+#    def plotStorageInv(self):
+        
+        
+        
+        
+            

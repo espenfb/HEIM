@@ -20,8 +20,7 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class deterministicModel(object):
-    ''' Deterministic model for regional power system with hydogen loads,
-    wind power and hydro power. '''
+    ''' Deterministic investment model for regional power system with hydogen loads. '''
     
     def __init__(self, time_data, dirs, mutables = {}):
          
@@ -49,8 +48,6 @@ class deterministicModel(object):
         self.time = self.time[self.time.isin(solar.index)]
         
         self.timerange = range(len(self.time))
-        
-        self.buildModel()
         
         
     def buildModel(self):
@@ -88,7 +85,14 @@ class deterministicModel(object):
                         keepfiles=False, #print the LP file for examination
                         symbolic_solver_labels=True,
                         options={"Method": 2,
-                                 "Crossover": 0})
+                                 "Crossover": 0})#,
+                          #       "QCPDual":0})#,
+#                                 "NodeMethod": 2,
+#                                 "MIPGap": 0.01,
+#                                 "MIPFocus": 3)
+    
+        #self.detModelInstance.write('model.mps',
+        #                        io_options={'symbolic_solver_labels':True})
 
         self.solution_time = time.time()-start_time
         
@@ -145,9 +149,12 @@ class deterministicModel(object):
         dmr.importDetRes(self, import_dir)
 
 def buildDetModel(mutables = {}):
+    ''' Defines abstract investment model, defines sets, parameters, variables,
+    constraints and objective function.'''
     
         mutable_dict = {'inv_cost': False,
-                        'CO2_cost': True}
+                        'CO2_cost': False,
+                        'H2_load_scaling': True}
         
         for i in mutables.keys():
             mutable_dict[i] = mutables[i]
@@ -240,13 +247,14 @@ def buildDetModel(mutables = {}):
         m.Wind_cap_pot = pe.Param(m.WIND_POWER_PLANTS, within = pe.NonNegativeReals)
         m.Wind_profile_inst = pe.Param(m.TIME, m.WIND_POWER_PLANTS, within = pe.NonNegativeReals)   
         m.Wind_profile_pot = pe.Param(m.TIME, m.WIND_POWER_PLANTS, within = pe.NonNegativeReals) 
-        m.Solar_profile_pot = pe.Param(m.TIME, m.SOLAR_POWER_PLANTS, within = pe.NonNegativeReals) 
+        m.Solar_profile = pe.Param(m.TIME, m.SOLAR_POWER_PLANTS, within = pe.NonNegativeReals) 
         
+        m.H2_load_scaling = pe.Param(within = pe.NonNegativeReals, mutable = mutable_dict['H2_load_scaling'])
         
         m.H2_storage_eff = pe.Param(within = pe.NonNegativeReals)
         m.H2_direct_eff = pe.Param(within = pe.NonNegativeReals)
-        m.Hydrogen_import_cost = pe.Param(within = pe.NonNegativeReals)
-        m.Hydrogen_import_cost_ccs = pe.Param(within = pe.NonNegativeReals)
+        m.Hydrogen_import_cost = pe.Param(m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
+        m.Hydrogen_import_cost_ccs = pe.Param(m.HYDROGEN_PLANTS, within = pe.NonNegativeReals)
         m.Hydrogen_CO2_emissions = pe.Param(within = pe.NonNegativeReals)
         m.Hydrogen_CO2_emissions_ccs = pe.Param(within = pe.NonNegativeReals)
         m.Initial_storage = pe.Param(m.STORAGE_PLANTS, within = pe.NonNegativeReals)
@@ -319,14 +327,14 @@ def buildDetModel(mutables = {}):
         
         def rampUpLimit_rule(m,t,i):
             if pe.value(t) > 0:
-                return m.prod[t,i] - m.prod[t-1,i] <= m.Ramp_rate[i]*m.gen_state[t,i]
+                return m.prod[t,i] - m.prod[t-1,i] <= m.Ramp_rate[i]*m.Plant_size[i]*m.gen_state[t,i]
             else:
                 return pe.Constraint.Skip
         m.rampUpLimit = pe.Constraint(m.TIME,m.THERMAL_POWER_PLANTS, rule = rampUpLimit_rule)
         
         def rampDownLimit_rule(m,t,i):
             if pe.value(t) > 0:
-                return m.prod[t-1,i] - m.prod[t,i] <= m.Ramp_rate[i]*m.gen_state[t,i]
+                return m.prod[t-1,i] - m.prod[t,i] <= m.Ramp_rate[i]*m.Plant_size[i]*m.gen_state[t,i]
             else:
                 return pe.Constraint.Skip
         m.rampDownLimit = pe.Constraint(m.TIME,m.THERMAL_POWER_PLANTS, rule = rampDownLimit_rule)
@@ -348,8 +356,8 @@ def buildDetModel(mutables = {}):
         # WIND POWER
         def windBalance_rule(m,t,i):
             if pe.value(m.Init_cap[i]) + pe.value(m.Wind_cap_pot[i]) > 0:
-                return m.prod[t,i] + m.cur[t,i] == m.Wind_profile_inst[t,i] \
-                        +  m.new_cap[i]*m.Wind_profile_pot[t,i]
+                return m.prod[t,i] + m.cur[t,i] == m.Wind_profile_inst[t,i]*m.Init_cap[i] \
+                        +  m.Wind_profile_pot[t,i]*m.new_cap[i]
             else:
                 return m.prod[t,i] + m.cur[t,i] == 0.0
         m.windBalance = pe.Constraint(m.TIME,m.WIND_POWER_PLANTS,
@@ -358,7 +366,7 @@ def buildDetModel(mutables = {}):
         def solarBalance_rule(m,t,i):
             if pe.value(m.Solar_cap_pot[i]) > 0:
                 return m.prod[t,i] + m.cur[t,i] == \
-                        m.new_cap[i]*m.Solar_profile_pot[t,i]
+                        m.Solar_profile[t,i]*(m.Init_cap[i] + m.new_cap[i])
             else:
                 return m.prod[t,i] + m.cur[t,i] == 0.0       
         m.solarBalance = pe.Constraint(m.TIME,m.SOLAR_POWER_PLANTS,
@@ -388,8 +396,8 @@ def buildDetModel(mutables = {}):
             if i in m.BATTERY_PLANTS:
                 return m.Battery_in_ratio*m.to_storage[t,i] <= m.new_cap[j]
             elif i in m.HYDROGEN_PLANTS:
-                return m.H2_direct_eff*m.hydrogen_direct[t,i] \
-                    + m.H2_storage_eff*m.to_storage[t,i] <= m.new_cap[j]
+                return m.hydrogen_direct[t,i] \
+                    + m.to_storage[t,i] <= m.new_cap[j]
         m.storageInPowerCap = pe.Constraint(m.TIME, m.STORAGE_PLANTS, rule = storageInPowerCap_rule)
 
         def storageOutPowerCap_rule(m, t, i):
@@ -409,7 +417,7 @@ def buildDetModel(mutables = {}):
         def hydrogenBalance_rule(m,t,i):
             return m.hydrogen_direct[t,i] + m.from_storage[t,i] \
                     + m.hydrogen_import[t,i] + m.hydrogen_import_ccs[t,i] \
-                    == m.H2_load[t,i]
+                    == m.H2_load[t,i]*m.H2_load_scaling
         m.hydrogenBalance = pe.Constraint(m.TIME, m.HYDROGEN_PLANTS, rule = hydrogenBalance_rule)
         
         
@@ -500,8 +508,8 @@ def buildDetModel(mutables = {}):
                     + sum(m.Branch_cost[i]*m.Trans_cap[i]*m.new_branch_cap[i] for i in m.NEW_BRANCHES)) \
                     + sum(sum(sum((m.Var_cost[j] + m.Emission_coef[j]*m.CO2_cost)*m.prod[t,i] for i in m.TYPE_TO_THERMAL_PLANTS[j])for j in m.THERMAL_PLANT_TYPES)
                           + sum(m.Rationing_cost*m.rat[t,i] for i in m.NODES) \
-                          + sum((m.Hydrogen_import_cost + m.Hydrogen_CO2_emissions*m.CO2_cost)*m.hydrogen_import[t,i]
-                                + (m.Hydrogen_import_cost_ccs + m.Hydrogen_CO2_emissions_ccs*m.CO2_cost)*m.hydrogen_import_ccs[t,i] for i in m.HYDROGEN_PLANTS) for t in m.TIME)
+                          + sum((m.Hydrogen_import_cost[i] + m.Hydrogen_CO2_emissions*m.CO2_cost)*m.hydrogen_import[t,i]
+                                + (m.Hydrogen_import_cost_ccs[i] + m.Hydrogen_CO2_emissions_ccs*m.CO2_cost)*m.hydrogen_import_ccs[t,i] for i in m.HYDROGEN_PLANTS) for t in m.TIME)
 
         m.obj = pe.Objective(rule = obj_rule, sense = pe.minimize)
         
@@ -510,7 +518,7 @@ def buildDetModel(mutables = {}):
 
 
 def detData(obj):
-    
+    ''' Data input for the investment model according to the abstract model.'''
     
     GW2MW = 1000
     KW2MW = 0.001
@@ -794,7 +802,7 @@ def detData(obj):
     solar_series.index = pd.Index(np.arange(len(solar_series.index)))
     solar_series.rename(columns = {i : obj.type2prefix['Solar'] + '%.2d' % int(i) for i in solar_series.columns.tolist()},
                                   level = 0, inplace = True)
-    di['Solar_profile_pot'] = solar_series.stack(level = 0).to_dict()
+    di['Solar_profile'] = solar_series.round(4).stack(level = 0).to_dict()
     wind_cap.fillna(0, inplace = True)
     
     di['Wind_cap_inst'] = wind_cap.Inst_cap.to_dict()
@@ -803,12 +811,18 @@ def detData(obj):
     di['H2_storage_eff'] = {None: h2_plant_char.loc['Elec','Energy rate [MWh/kg]'] + 
                               h2_plant_char.loc['H2_Storage','Energy rate [MWh/kg]']} # MWh/Nm^3        
     di['H2_direct_eff'] = {None: h2_plant_char.loc['Elec','Energy rate [MWh/kg]']} # MWh/Nm^3
-    di['Hydrogen_import_cost'] = {None: float(param.import_cost.values[0])} # €/Nm3
-    di['Hydrogen_import_cost_ccs'] = {None: float(param.import_cost_ccs.values[0])} # €/Nm3
+#    di['Hydrogen_import_cost'] = {None: float(param.import_cost.values[0])} # €/kg
+#    di['Hydrogen_import_cost_ccs'] = {None: float(param.import_cost_ccs.values[0])} # €/kg
     di['Hydrogen_CO2_emissions'] = {None: float(param.CO2_H2_imp.values[0])} # kg/Nm^3
     di['Hydrogen_CO2_emissions_ccs'] = {None: float(param.CO2_H2_imp_ccs.values[0])} # kg/Nm^3
-    di['Initial_storage'] = {i: 0.5 for i in di['STORAGE_PLANTS'][None]} 
+    di['Initial_storage'] = {i: 0.5 for i in di['STORAGE_PLANTS'][None]}
     
+    hydrogen_ng = copy.copy(obj.data.hydrogen_ng)
+    hydrogen_ng.set_index('Plant', inplace = True)
+    di['Hydrogen_import_cost'] = hydrogen_ng.H2_ng.to_dict()
+    di['Hydrogen_import_cost_ccs'] = hydrogen_ng.H2_ng_ccs.to_dict()
+    
+    di['H2_load_scaling'] = {None: 1.0}
     
     di['Battery_in_ratio'] = {None: float(param.battery_in_ratio.values[0])}
     di['Battery_out_ratio'] = {None: float(param.battery_out_ratio.values[0])} 
@@ -819,8 +833,8 @@ def detData(obj):
     wind_series.rename(columns = {i : obj.type2prefix['Wind'] + '%.2d' % int(i) for i in wind_series.columns.levels[0].tolist()},
                                   level = 0, inplace = True)
     
-    di['Wind_profile_inst'] = wind_series.stack(level = 0).Inst_cap.fillna(0).to_dict()
-    di['Wind_profile_pot'] = wind_series.stack(level = 0).Pot_cap.to_dict()
+    di['Wind_profile_inst'] = wind_series.round(4).stack(level = 0).Inst_cap.fillna(0).to_dict()
+    di['Wind_profile_pot'] = wind_series.round(4).stack(level = 0).Pot_cap.to_dict()
     
     line_data.index = list(zip(line_data.index, line_data.From,line_data.To))
     di['Branch_cost'] = line_data[line_data.Type == 'New'].Cost.to_dict()

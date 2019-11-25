@@ -15,9 +15,9 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 #import cartopy
 from shapely.geometry import Point, LineString
-from mpl_toolkits.basemap import Basemap
-import matplotlib.cm as cm
-import matplotlib as mpl
+#from mpl_toolkits.basemap import Basemap
+#import matplotlib.cm as cm
+#import matplotlib as mpl
 import copy
 
 from ast import literal_eval
@@ -81,7 +81,11 @@ class savedRes(object):
                 continue
 
             for c in self.plant_inv.columns:
-                out.loc[(b,self.type_identifier[t]), c] = self.plant_inv.loc[indx,c]
+                if t == 'E':
+                    out.loc[(b,self.type_identifier[t]), c] = self.plant_inv.loc[indx,c]*self.data.hydrogen_plant_char.loc[0,'Energy rate [MWh/kg]']
+                    
+                else:
+                    out.loc[(b,self.type_identifier[t]), c] = self.plant_inv.loc[indx,c]
                     
         out = out[out.sum(axis = 1) != 0]
 #        out.drop(labels = 'H2_Storage', level = 1, inplace = True)
@@ -261,7 +265,8 @@ class savedRes(object):
             
             self.data.bus = gpd.GeoDataFrame(buses, geometry = 'Coordinates')
 
-    def plotMap(self, plotLineType = ['Both'], node_color = 'k', colormap = 'tab20c')      :     
+    def plotMap(self, plotLineType = ['Both'], node_color = 'k',
+                colormap = 'tab20c', lwidth = 2.0)      :     
         #fig = plt.figure('Map')
         fig, axes = plt.subplots(nrows=1,
                                  ncols= len(plotLineType),
@@ -288,23 +293,23 @@ class savedRes(object):
             if i == 'Both':
                 line_data = self.data.line.groupby(['From','To']).agg({'Cap':'sum', 'geometry': 'first'})
                 line_data = gpd.GeoDataFrame(line_data)
-                line_data.plot(ax = ax, column='Cap', cmap=colormap, vmin=vmin, vmax=vmax)
+                line_data.plot(ax = ax, column='Cap', cmap=colormap, vmin=vmin, vmax=vmax, linewidth = lwidth)
             elif i == 'Res':
                 line_data = self.getLineRes()
-                line_data.plot(ax = ax, column='Cap', cmap=colormap, vmin=vmin, vmax=vmax)
+                line_data.plot(ax = ax, column='Cap', cmap=colormap, vmin=vmin, vmax=vmax, linewidth = lwidth)
             elif i == 'Total':
                 line_data = self.getLineRes()
                 b = self.data.line.groupby(['From','To','Type']).agg({'Cap':'sum', 'geometry': 'first'}).reset_index('Type')
                 line_data = pd.concat([line_data, b[b.Type == 'Existing']], sort = True)
                 line_data = line_data.groupby(['From','To']).agg({'Cap':'sum', 'geometry': 'first'})
                 line_data = gpd.GeoDataFrame(line_data)
-                line_data.plot(ax = ax, column='Cap', cmap=colormap, vmin=vmin, vmax=vmax)
+                line_data.plot(ax = ax, column='Cap', cmap=colormap, vmin=vmin, vmax=vmax, linewidth = lwidth)
             else:
                 line_data = self.data.line.groupby(['From','To','Type']).agg({'Cap':'sum', 'geometry': 'first'})
                 line_data.reset_index(level = 'Type', inplace = True)
                 line_data = gpd.GeoDataFrame(line_data)
                 line_data.loc[line_data.Type == i ].plot(ax = ax,
-                             column='Cap', cmap=colormap, vmin=vmin, vmax=vmax)
+                             column='Cap', cmap=colormap, vmin=vmin, vmax=vmax, linewidth = lwidth)
         
             #ax = plt.gca()
             ax.axis('off')
@@ -399,19 +404,43 @@ class savedRes(object):
     def plotTotalProd(self):
         
         total_prod = self.getTotalProd()
-        plt.plot(total_prod)
+        plt.plot(total_prod, color = 'b')
         
     def getTotalElectricLoad(self):
         load = self.data.load_series
         load = load[load.index.isin(self.bus.index)]
         total_load = load.sum(axis = 1).to_list()
         return total_load
+    
+    def getTotalH2Load(self):
+        
+        h2_plant_data = self.data.hydrogen_plant_char.set_index('Type')
+        direct_energy = h2_plant_data.loc['Elec','Energy rate [MWh/kg]']
+        storage_energy = direct_energy + h2_plant_data.loc['H2_Storage','Energy rate [MWh/kg]']
+        
+        index = np.arange(len(self.bus.index))
+        
+        idx = pd.IndexSlice
+        to_storage = self.hydrogen.loc[idx[:], idx[:,'hydrogen_to_storage']].sum(axis = 1)
+        to_storage.index = index
+        direct = self.hydrogen.loc[idx[:], idx[:,'hydrogen_direct']].sum(axis = 1)
+        direct.index = index
+        
+        return to_storage*storage_energy + direct*direct_energy
+    
+    def getTotalLoad(self):
+        
+        return self.getTotalElectricLoad() + self.getTotalH2Load()
         
     def plotTotalElectricLoad(self):
         
-        total_load = self.getTotalElectricLoad()
-        plt.plot(total_load)
+        total_electric_load = self.getTotalElectricLoad()
+        plt.plot(total_electric_load, color = 'r')
         
+    def plotTotalLoad(self):
+        
+        total_load = self.getTotalLoad()
+        plt.plot(total_load, color = 'r')
     
     def getNetEnergyStorage(self):
         
@@ -430,16 +459,19 @@ class savedRes(object):
         net_storage = to_storage - from_storage
         
         return net_storage
-        
+    
+    
 
     def plotEnergyBalance(self):
         
         self.plotTotalProd()
-        total_load = self.getTotalElectricLoad()
+        self.plotTotalLoad()
+        total_load = self.getTotalLoad()
         
         indx = np.arange(len(total_load))
         
         net_storage = self.getNetEnergyStorage()
+ #       hydrogen_load = self.getNetEnergyElec()
         
         to_storage_adj = [max(i,0) for i in net_storage]
         from_storage_adj = [abs(min(i,0)) for i in net_storage]
@@ -448,10 +480,13 @@ class savedRes(object):
         
         load_plus = [total_load[i] + to_storage_adj[i] for i in indx]
         
+ #       load_plus_h2 = [load_plus[i] + hydrogen_load[i] for i in indx]
+        
         ax = plt.gca()
         
         ax.fill_between(indx,total_load, load_minus, color = 'g')
         ax.fill_between(indx,total_load, load_plus, color = 'b')
+ #       ax.fill_between(indx,load_plus, load_plus_h2, color = 'r')
         
     def plotTotalLoadDuration(self):
         
