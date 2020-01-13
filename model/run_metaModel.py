@@ -16,14 +16,14 @@ time_data = {
 dirs = {
 'data_dir' : "Data\\",
 'ctrl_data_file' : 'ctrl_data.csv',
-'res_dir' : 'NEEDS_h2trans\\Meta_results_double_line\\'}
+'res_dir' : 'NEEDS_fixed_hydrogen_load\\Meta_results_noh2\\'}
 meta_data = {'type': 'parameters',
              'param': 'CO2_cost',
-             'range': np.arange(0.00,0.29,0.03)} 
+             'range': np.arange(0.18,0.29,0.03)} 
 
 obj = mm.metaModel(time_data, dirs, meta_data)
 
 
-#obj.runMetaModel()
+obj.runMetaModel()
 
 obj.loadRes()

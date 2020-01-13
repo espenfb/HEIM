@@ -59,10 +59,8 @@ class metaModel(object):
             self.res.append(sr.savedRes(self.res_dir + 'Result' + '_' +
                                         self.param + '_' + str(i) + '\\',
                                         data = self.model.data))
-
-
-
-    def plotH2Sorce(self, plotType = 'bar'):
+            
+    def getH2Source(self):
         
         r = pd.DataFrame()
         for n, i in enumerate(self.res):
@@ -70,8 +68,31 @@ class metaModel(object):
             r[param_val] = i.getH2SourceBus().sum()
         
         r[r < 0] = 0
-        r.T.plot(kind = plotType)
+        return r
+
+
+    def plotH2Source(self, plotType = 'bar', alpha = 1.0, ax = None, xunit = 'ton'):
         
+        if ax == None:
+            plt.figure()
+            ax = plt.gca()
+        
+        r = self.getH2Source().T
+        if xunit == 'ton':
+            r.index = r.index*1000
+        
+        r.plot(kind = plotType, alpha = alpha, ax = ax)
+        
+    def getH2Price(self):
+        out = pd.DataFrame()
+        idx = pd.IndexSlice
+        for n, res in enumerate(self.res):
+            param_val = np.round(self.range[n],4)
+            weights = res.getH2ShareBus()
+            prices = res.hydrogen.loc[(idx[:],idx[:,'hydrogen_price'])].mean()
+            prices.index = prices.index.droplevel(level = 1)
+            out.loc['Hydrogen price',param_val] = (weights*prices).sum()
+        return out
         
     def plotInvByType(self, plotType = 'bar'):
         r = pd.DataFrame()
@@ -87,22 +108,47 @@ class metaModel(object):
         for n, i in enumerate(self.res):
             param_val = np.round(self.range[n],4)
             r[param_val] = i.invByType().T.sum().loc[['H2_Storage', 'Battery Energy']]
-        
-        
-    def plotEnergySumByType(self, plotType = 'bar'):
+       
+    def getEnergySumByType(self):
         r = pd.DataFrame()
         for n, i in enumerate(self.res):
             param_val = np.round(self.range[n],4)
             r[param_val] = i.energySumByType()['prod']
             
-        r.T.plot(kind = plotType)
+        return r
+        
+    def plotEnergySumByType(self, plotType = 'bar', xunit = 'ton'):
+        r = pd.DataFrame()
+        for n, i in enumerate(self.res):
+            param_val = np.round(self.range[n],4)
+            r[param_val] = i.energySumByType()['prod']
+        
+        e_sum = r.T
+        if xunit == 'ton':
+            e_sum.index = e_sum.index*1000
+        
+        e_sum.plot(kind = plotType)
+        
+    def getHydrogenNgEmissions(self):
+        out = pd.DataFrame()
+        for n, res in enumerate(self.res):
+            param = self.range[n]
+            out.loc[param, 'Emissions from H2 [ton CO2]'] = res.emissionFromH2() # kg
+        return out    
+    
+    def getPowerSystemEmissions(self):
+        out = pd.DataFrame()
+        for n, res in enumerate(self.res):
+            param = self.range[n]
+            out.loc[param, 'Emissions from PS [CO2]'] = res.emissionByType().sum() # kg
+        return out
         
     def getTotalEmissions(self):
         out = pd.DataFrame()
         for n, res in enumerate(self.res):
             param = self.range[n]
-            out.loc[param, 'Emissions [ton CO2]'] = res.emissionByType().sum() +\
-            res.emissionFromH2()
+            out.loc[param, 'Tot Emissions [ton CO2]'] = res.emissionByType().sum() +\
+            res.emissionFromH2() # kg
         return out
     
     def plotTotalEmissions(self, figure_name = None):
@@ -113,9 +159,10 @@ class metaModel(object):
         plt.figure(figure_name)
         ax = plt.gca()
         (emissions/1E3).plot(ax = ax)
+        ax.set_ylabel('CO$_2$ emission [Ton]', fontsize = 12)
+        ax.set_xlabel('CO$_2$ price [\$/kg]', fontsize = 12)
 #        else:
 #            (out/1E3).plot()
-        
         
     def getPriceStats(self):
         
@@ -196,11 +243,12 @@ class metaModel(object):
     
     def getBatteryInv(self):
         
-        bat = []
-        for res in self.res:
-            bat.append(res.invByType().loc['Battery','new_cap'])
+        out = pd.DataFrame()
+        for n,res in enumerate(self.res):
+            param = self.range[n]
+            out.loc[param, 'Battery'] = res.invByType().loc['Battery','new_cap']
             
-        return bat
+        return out
   
     def getHydrogenStorage(self):
         
@@ -211,10 +259,50 @@ class metaModel(object):
             h2_storage.append(res.invByType().loc['H2_Storage','new_cap']*en_rate )
             
         return h2_storage
+    
+    def getLineInv(self, new_cap_only = True):
         
+        if new_cap_only:
+            init = 0
+        else:
+            line_data = self.res[0].data.line
+            init = line_data[line_data.Type == 'Existing'].Cap.sum()
+        
+        out = pd.DataFrame()
+        for n,r in enumerate(self.res):
+            param = self.range[n]
+            out.loc[param, 'Transmission'] = init + r.line_inv.Cap.sum()
+        return out
 #    def plotStorageInv(self):
         
         
+    def getMetaStat(self):
         
+        idx = pd.IndexSlice
         
+        out = pd.DataFrame()
+        for n,r in enumerate(self.res):
+            param = self.range[n]
+            prod = r.plant.loc[idx[:],idx[:,'prod']].sum().sum()
+            cur = r.plant.loc[idx[:],idx[:,'cur']].sum().sum()
+            out.loc[param, 'curtailment [%]'] = (cur/(cur + prod))*100
+            out.loc[param, 'price mean [$/MWh]'] = r.bus.loc[idx[:],idx[:,'nodal_price']].mean().mean()
+            out.loc[param, 'price std [$/MWh]'] = r.bus.loc[idx[:],idx[:,'nodal_price']].std().mean()        
+        return out
+    
+    def getElecOverSizing(self):
+        
+        out = pd.DataFrame()
+        for n,r in enumerate(self.res):
+            param = self.range[n]
+            out.loc[:,param] = r.getElecOverSizing() 
+        return out
+    
+    def getH2StorageDur(self):
+        
+        out = pd.DataFrame()
+        for n,r in enumerate(self.res):
+            param = self.range[n]
+            out.loc[:,param] = r.getH2StorageDur()
+        return out
             

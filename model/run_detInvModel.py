@@ -16,7 +16,7 @@ time_data = {
 dirs = {
 'data_dir' : "Data\\",
 'ctrl_data_file' : 'ctrl_data.csv',
-'res_dir' : 'Result_test_uc\\'}
+'res_dir' : 'Result_test_master\\'}
 obj = dim.deterministicModel(time_data, dirs)
 
 obj.buildModel()
@@ -31,8 +31,3 @@ obj.saveRes(dirs['res_dir'])
 
 res = sr.savedRes(dirs['res_dir'], data = obj.data)
 
-#
-#  Matrix range     [2e-06, 4e+03]
-#  Objective range  [1e+00, 2e+07]
-#  Bounds range     [1e+00, 4e+03]
-#  RHS range        [9e-05, 6e+06]

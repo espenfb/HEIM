@@ -11,15 +11,15 @@ import pandas as pd
 
 time_data = {
 'start_date': pd.Timestamp(year = 2015, month = 1, day = 1),
-'end_date': pd.Timestamp(year = 2015, month = 12, day = 29),
+'end_date': pd.Timestamp(year = 2015, month = 12, day = 28),
 'ref_date': pd.Timestamp(year = 2015, month = 1, day = 1)}
 dirs = {
 'data_dir' : "Data\\",
 'ctrl_data_file' : 'ctrl_data.csv',
-'res_dir' : 'Result_decomposed_year\\'}
+'res_dir' : 'Result_decomposed_100\\'}
 obj = dim.deterministicModel(time_data, dirs)
 
-obj.run(maxItr = 100)
+obj.run(maxItr = 300)
 
 #obj.processResults()
 

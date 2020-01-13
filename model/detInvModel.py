@@ -85,7 +85,8 @@ class deterministicModel(object):
                         keepfiles=False, #print the LP file for examination
                         symbolic_solver_labels=True,
                         options={"Method": 2,
-                                 "Crossover": 0})#,
+                                "Crossover": 0,
+                                 'BarHomogeneous':1})#,
                           #       "QCPDual":0})#,
 #                                 "NodeMethod": 2,
 #                                 "MIPGap": 0.01,
@@ -149,12 +150,12 @@ class deterministicModel(object):
         dmr.importDetRes(self, import_dir)
 
 def buildDetModel(mutables = {}):
-    ''' Defines abstract investment model, defines sets, parameters, variables,
-    constraints and objective function.'''
-    
+        ''' Defines abstract investment model, defines sets, parameters, variables,
+        constraints and objective function.'''
+        
         mutable_dict = {'inv_cost': False,
-                        'CO2_cost': False,
-                        'H2_load_scaling': True}
+                            'CO2_cost': False,
+                            'H2_load_scaling': True}
         
         for i in mutables.keys():
             mutable_dict[i] = mutables[i]
@@ -813,8 +814,8 @@ def detData(obj):
     di['H2_direct_eff'] = {None: h2_plant_char.loc['Elec','Energy rate [MWh/kg]']} # MWh/Nm^3
 #    di['Hydrogen_import_cost'] = {None: float(param.import_cost.values[0])} # €/kg
 #    di['Hydrogen_import_cost_ccs'] = {None: float(param.import_cost_ccs.values[0])} # €/kg
-    di['Hydrogen_CO2_emissions'] = {None: float(param.CO2_H2_imp.values[0])} # kg/Nm^3
-    di['Hydrogen_CO2_emissions_ccs'] = {None: float(param.CO2_H2_imp_ccs.values[0])} # kg/Nm^3
+    di['Hydrogen_CO2_emissions'] = {None: float(param.CO2_H2_imp.values[0])} # kg/kg
+    di['Hydrogen_CO2_emissions_ccs'] = {None: float(param.CO2_H2_imp_ccs.values[0])} # kg/kg
     di['Initial_storage'] = {i: 0.5 for i in di['STORAGE_PLANTS'][None]}
     
     hydrogen_ng = copy.copy(obj.data.hydrogen_ng)
@@ -822,7 +823,7 @@ def detData(obj):
     di['Hydrogen_import_cost'] = hydrogen_ng.H2_ng.to_dict()
     di['Hydrogen_import_cost_ccs'] = hydrogen_ng.H2_ng_ccs.to_dict()
     
-    di['H2_load_scaling'] = {None: 1.0}
+    di['H2_load_scaling'] = {None: 0.0}
     
     di['Battery_in_ratio'] = {None: float(param.battery_in_ratio.values[0])}
     di['Battery_out_ratio'] = {None: float(param.battery_out_ratio.values[0])} 

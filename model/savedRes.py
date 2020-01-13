@@ -68,7 +68,7 @@ class savedRes(object):
         
         return out
     
-    def invByBus(self):
+    def invByBus(self, skip_types = ['HS','ESE']):
         indx_1 = [int(i) for i in self.bus.columns.levels[0]]
         indx_2 = self.type_identifier.values()
         out = pd.DataFrame(columns = self.plant_inv.columns,
@@ -77,7 +77,7 @@ class savedRes(object):
         for indx in self.plant_inv.index:
             b = int(indx[-2:])
             t = indx[:-2]
-            if t == 'HS' or t == 'ESE':
+            if t in skip_types:
                 continue
 
             for c in self.plant_inv.columns:
@@ -139,7 +139,11 @@ class savedRes(object):
     def emissionFromH2(self):
         e_rate = self.data.parameters['CO2_H2_imp'][0]
         ng_hydrogen = self.getH2SourceBus().sum()['Natural Gas']
-        return e_rate*ng_hydrogen
+        
+        e_rate_ccs = self.data.parameters['CO2_H2_imp_ccs'][0]
+        ng_hydrogen_ccs = self.getH2SourceBus().sum()['Natural Gas CCS']
+        
+        return e_rate*ng_hydrogen + e_rate_ccs*ng_hydrogen_ccs
     
     def plotenergySumByType(self):
         energySumByType = self.energySumByType()
@@ -158,9 +162,12 @@ class savedRes(object):
             
         inv_by_type.plot(kind = plotType, subplots = subplots, ax = ax)
         
-    def plotInvByBus(self):
+    def plotInvByBus(self, lower_limit = 0.0):
+        
+        load = self.data.load_series.sum()/8760
         
         df = self.invByBus()
+        df = df[(df.sum(axis = 1) < lower_limit) == False] # remove entries with capacity under lower limit
         df.Init_cap = df.Init_cap - df.retired_cap
         ncols = len(df.index.levels[0])
         #plotting
@@ -171,23 +178,34 @@ class savedRes(object):
                                  #figsize=(14 / 2.54, 10 / 2.54))  # width, height
         for i, row in enumerate(df.index.levels[0]):
             ax = axes[i]
+        
+            if str(row) in load.index:
+                load_level = load.loc[str(row)]
+            else:
+                load_level = 0.0
+            index_num = len(df.loc[(row,)])
+            ax.plot([0,index_num],[load_level,load_level], color = 'grey', zorder = 0)
+            
             df.loc[(row,)].plot(ax=ax, kind='bar', width=.8 , stacked = True)
         
             ax.set_xlabel(row, weight='bold')
             ax.xaxis.set_label_coords(0.5,-0.2)
             #ax.yaxis.grid(b=True, which='major', color='black', linestyle='--', alpha=.4)
             ax.set_axisbelow(True)
+            
             if i  != (len(df.index.levels[0])-1):
                 #ax.spines['left'].set_visible(False)
                 ax.legend_.remove()
             else:
-                ax.legend(['Initial capacity', 'New capacity'])
+                ax.legend(['Average demand','Initial capacity', 'New capacity'])
             #ax.spines['right'].set_visible(False)
             #ax.spines['top'].set_visible(False)
+            if i == 0:
+                ax.set_ylabel('Capacity [MW]', fontsize = 12)
             
             for tick in ax.get_xticklabels():
                 tick.set_rotation(90)
-                
+            
         
         #make the ticklines invisible
         ax.tick_params(axis=u'x', which=u'x', length=0)
@@ -200,21 +218,28 @@ class savedRes(object):
         
     def getH2SourceBus(self):
         
-        df = pd.DataFrame(columns = ['Direct','Storage','Natural Gas',
+        df = pd.DataFrame(columns = ['Elec direct','Elec via storage','Natural Gas',
                                      'Natural Gas CCS'])
         for i, row in enumerate(self.hydrogen.columns.levels[0]):
-            df.loc[row,'Direct'] = self.hydrogen[row].hydrogen_direct.sum()
-            df.loc[row,'Storage'] = self.hydrogen[row].hydrogen_from_storage.sum()
+            df.loc[row,'Elec direct'] = self.hydrogen[row].hydrogen_direct.sum()
+            df.loc[row,'Elec via storage'] = self.hydrogen[row].hydrogen_from_storage.sum()
             df.loc[row,'Natural Gas'] = self.hydrogen[row].hydrogen_import.sum()
             df.loc[row,'Natural Gas CCS'] = self.hydrogen[row].hydrogen_import_ccs.sum()
         return df
+    
+    def getH2ShareBus(self):
+        
+        h2_bus = self.getH2SourceBus().sum(axis = 1)
+        h2_total = self.getH2SourceBus().sum().sum()
+        
+        return h2_bus/h2_total
              
     def plotH2ByBus(self, plotType = 'bar'):
         
         df = self.getH2SourceBus()
         
-        df.plot(kind = plotType, stacked = True)
-        plt.legend(['Direct','Storage','Natural Gas', 'Natural Gas CCS'])
+        df.plot(kind = plotType, stacked = True, alpha=0.8)
+        plt.legend(['Elec direct','Elec via storage','Natural Gas', 'Natural Gas CCS'])
         
     def plotAttr(self, res_type, res_attr):
         
@@ -266,19 +291,25 @@ class savedRes(object):
             self.data.bus = gpd.GeoDataFrame(buses, geometry = 'Coordinates')
 
     def plotMap(self, plotLineType = ['Both'], node_color = 'k',
-                colormap = 'tab20c', lwidth = 2.0)      :     
+                colormap = 'tab20c', lwidth = 2.0, nodesize = None):     
         #fig = plt.figure('Map')
         fig, axes = plt.subplots(nrows=1,
                                  ncols= len(plotLineType),
                                  sharey=True, constrained_layout=True)
         fig.canvas.set_window_title('Map')# + ' - ' + plotLineType)
         
+        if nodesize == 'Battery Power':
+            bp = self.plant_inv.new_cap[[('ESP' in i)
+                                        for i in self.plant_inv.new_cap.index]]
+            bp.index = [int(i[3:]) for i in bp.index]
+            self.data.bus['Size'] = bp           
+        
         for n, i in enumerate(plotLineType):
             if len(plotLineType) > 1:
                 ax = axes[n]
             else:
                 ax = axes
-            ax.set_title(i)
+            #ax.set_title(i)
             tx = gpd.read_file('..\\geo\\Texas_State_Boundary_Detailed\\Texas_State_Boundary_Detailed.shp')
             tx.plot(ax = ax, color='white', edgecolor='black')
             
@@ -286,7 +317,16 @@ class savedRes(object):
             vmin = line_data_limits.Cap.min()
             vmax = line_data_limits.Cap.max()
             
-            self.data.bus.plot(ax = ax, color = node_color)
+            if nodesize == 'Battery Power':
+                scaling = 10
+                self.data.bus.plot(ax = ax, color = node_color, markersize = self.data.bus['Size']/scaling)
+                for area in [5, 50, 500]:
+                    plt.scatter([], [], c='k', alpha=0.3, s=area,
+                label=str(area*scaling) + ' MW')
+                plt.legend(scatterpoints=1, frameon=False, labelspacing=1, title='Battery Power')
+            else:
+                self.data.bus.plot(ax = ax, color = node_color)
+                
             for idx, row in self.data.bus.iterrows():
                 ax.annotate(s = idx, xy = row['xy'], color = 'b', fontsize = 14)
                 
@@ -323,7 +363,8 @@ class savedRes(object):
         
         fig.subplots_adjust(right=0.8)
         cax = fig.add_axes([0.85, 0.1, 0.03, 0.8])
-        fig.colorbar(sm, cax = cax)
+        cbar = fig.colorbar(sm, cax = cax)
+        cbar.set_label('Transmission capacity [MW]', fontsize = 11)
        # plt.tight_layout()
         plt.show()
         
@@ -499,6 +540,30 @@ class savedRes(object):
         plt.plot(np.sort(total_load)[::-1], color = 'b')
         plt.plot(np.sort(total_load_and_storage)[::-1], color = 'r')
         
+    
+    def getElecOverSizing(self):
+        
+        idx = pd.IndexSlice
+        
+        e_cap = self.invByBus().loc[idx[:,'Elec'],idx[:]].sum(axis = 1)
+        e_cap.index=e_cap.index.droplevel(level=1)
+        
+        h_load = self.data.hydrogen_load['high']*self.data.hydrogen_plant_char.loc[0,'Energy rate [MWh/kg]']/24
+        h_load.index = self.data.hydrogen_load.Bus
+        
+        return e_cap/h_load
+    
+    def getH2StorageDur(self):
+        
+        idx = pd.IndexSlice
+        
+        s_cap = self.invByBus(skip_types = ['ESE']).loc[idx[:,'H2_Storage'],idx[:]].sum(axis = 1)
+        s_cap.index=s_cap.index.droplevel(level=1)
+        
+        h_load = self.data.hydrogen_load['high']*self.data.hydrogen_plant_char.loc[0,'Energy rate [MWh/kg]']/24
+        h_load.index = self.data.hydrogen_load.Bus
+        
+        return s_cap/h_load
         
         
         
