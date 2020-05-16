@@ -11,7 +11,7 @@ import savedRes as sr
 
 time_data = {
 'start_date': pd.Timestamp(year = 2015, month = 1, day = 1),
-'end_date': pd.Timestamp(year = 2015, month = 1, day = 31),
+'end_date': pd.Timestamp(year = 2015, month = 1, day = 5),
 'ref_date': pd.Timestamp(year = 2015, month = 1, day = 1)}
 dirs = {
 'data_dir' : "Data\\",

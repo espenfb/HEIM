@@ -565,10 +565,100 @@ class savedRes(object):
         
         return s_cap/h_load
         
+    def getElecUtilization(self):
         
+        idx = pd.IndexSlice
         
+        h = self.getH2SourceBus()
+        h.index = [int(i[1:]) for i in h.index]
+        h = h['Elec direct'] + h['Elec via storage']
+        h = h[h>0]
+        
+        e_cap = self.invByBus().loc[idx[:,'Elec'],idx[:]].sum(axis = 1)
+        e_cap.index=e_cap.index.droplevel(level=1)
+        
+        h = h[h.index.isin(e_cap.index)]
+        
+        rate = self.data.hydrogen_plant_char.loc[0,'Energy rate [MWh/kg]']
     
+        return h/(e_cap*8760/rate)
+    
+    def getBatteryUtilization(self):
         
+        idx = pd.IndexSlice
+        rate_in = self.data.parameters.loc[0,'battery_in_ratio']
+        e_in = self.battery.loc[idx[:],idx[:,'to_storage']]
+        e_in.columns = e_in.columns.droplevel(level=1)
+        
+        rate_out = self.data.parameters.loc[0,'battery_out_ratio']
+        e_out = self.battery.loc[idx[:],idx[:,'from_storage']]
+        e_out.columns = e_out.columns.droplevel(level=1)
+        
+        e = (abs(e_in*rate_in - e_out*rate_out)).sum()
+        e.index = [int(i[2:]) for i in e.index]
+        
+        if 'Battery' not in self.invByBus(skip_types = []).index.get_level_values(1):
+            return -1
+            
+        b_cap = self.invByBus(skip_types = []).loc[idx[:,'Battery'],idx[:]].sum(axis = 1)
+        b_cap.index = b_cap.index.droplevel(level=1)
+        
+        e = e[e.index.isin(b_cap.index)]
+        return e/(b_cap*8760)
+        
+    def getH2StorageCap(self):
+        
+        idx = pd.IndexSlice
+        
+        s_cap = self.invByBus(skip_types = ['ESE']).loc[idx[:,'H2_Storage'],idx[:]].sum(axis = 1)
+        s_cap.index = s_cap.index.droplevel(level=1)
+        
+        return s_cap
+    
+    def getElecCap(self):
+        
+        idx = pd.IndexSlice
+        
+        e_cap = self.invByBus().loc[idx[:,'Elec'],idx[:]].sum(axis = 1) # in MW
+        e_cap.index = e_cap.index.droplevel(level=1)
+        
+        return e_cap
+        
+    def getAverageH2PowerPrice(self):
+    
+        idx = pd.IndexSlice
+        
+        h2_plant_data = self.data.hydrogen_plant_char.set_index('Type')
+        direct_energy = h2_plant_data.loc['Elec','Energy rate [MWh/kg]']
+        storage_energy = direct_energy + h2_plant_data.loc['H2_Storage','Energy rate [MWh/kg]']
+        
+        index = np.arange(len(self.bus.index))
+        
+        idx = pd.IndexSlice
+        to_storage = self.hydrogen.loc[idx[:], idx[:,'hydrogen_to_storage']]
+        to_storage.index = index
+        direct = self.hydrogen.loc[idx[:], idx[:,'hydrogen_direct']]
+        direct.index = index
+        
+        h2_storage = to_storage*storage_energy
+        h2_storage.columns = h2_storage.columns.droplevel(level=1)
+        
+        h2_direct = direct*direct_energy
+        h2_direct.columns = h2_direct.columns.droplevel(level=1)
+        
+        h2_tot = h2_storage + h2_direct
+        h2_tot.columns = [int(i[1:]) for i in h2_tot.columns]
+        h2_fraction = h2_tot/h2_tot.sum()
+        
+        
+        price = self.bus.loc[idx[:],idx[:,'nodal_price']]
+        price.columns = price.columns.droplevel(level=1)
+        price.columns = [int(i) for i in price.columns]
+        price.index =  np.arange(len(price.index))
+        
+        h2_rel_mean_power_price = (h2_fraction*price).sum()/price.mean()
+        
+        return  h2_rel_mean_power_price[h2_tot.sum() > 1]
     
         
         

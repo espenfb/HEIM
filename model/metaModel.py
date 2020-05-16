@@ -37,10 +37,28 @@ class metaModel(object):
         
         self.model.buildModel()
         
+        if self.kind == 'relative':
+            param = getattr(self.model.detModelInstance, self.param)
+            if self.index == 'None':
+                base_param = param.value
+            else: 
+                base_param = param[self.index]
+        
         for i in self.range:
             
-            setattr(self.model.detModelInstance, self.param, i)
-            print('Solving for ', self.param, ' = ', getattr(self.model.detModelInstance, self.param).value)
+            if self.kind == 'relative':
+                value = base_param*(1+i)
+            else:
+                value = i
+                
+            param = getattr(self.model.detModelInstance, self.param)
+            if self.index == 'None':
+                param.set_value(value)
+                print('Solving for ', self.param, ' = ', getattr(self.model.detModelInstance, self.param).value)
+            else: 
+                param[self.index] = value
+                print('Solving when ', self.param, ' for ', self.index, ' = ',
+                      getattr(self.model.detModelInstance, self.param)[self.index].value)
             
             self.model.solve()
     
@@ -305,4 +323,48 @@ class metaModel(object):
             param = self.range[n]
             out.loc[:,param] = r.getH2StorageDur()
         return out
+    
+    def getElecUtilization(self):
+        
+        out = pd.DataFrame()
+        for n,r in enumerate(self.res):
+            param = self.range[n]
+            out[param] = r.getElecUtilization()
             
+        return out
+    
+    def getBatteryUtilization(self):
+        
+        out = pd.DataFrame()
+        for n,r in enumerate(self.res):
+            param = self.range[n]
+            out[param] = r.getBatteryUtilization()
+            
+        return out
+        
+    def getH2StorageCap(self):
+        
+        out = pd.DataFrame()
+        for n,r in enumerate(self.res):
+            param = self.range[n]
+            out[param] = r.getH2StorageCap()
+            
+        return out
+        
+    def getElecCap(self):
+        
+        out = pd.DataFrame()
+        for n,r in enumerate(self.res):
+            param = self.range[n]
+            out[param] = r.getElecCap() # in MW
+            
+        return out
+    
+    def getAverageH2PowerPrice(self):
+        
+        out = pd.DataFrame()
+        for n,r in enumerate(self.res):
+            param = self.range[n]
+            out[param] = r.getAverageH2PowerPrice()
+            
+        return out

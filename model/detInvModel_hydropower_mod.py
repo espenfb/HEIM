@@ -409,62 +409,68 @@ def buildDetModel(mutables = {}):
                 return pe.Constraint.Skip
         m.storageOutPowerCap = pe.Constraint(m.TIME, m.STORAGE_PLANTS, rule = storageOutPowerCap_rule)
             
+    
+             
         
-        
-#        def maxStorageCap_rule(m,i):
-#            return m.storage_cap_new[i]  <= m.Storage_cap_max[i]
-#        m.maxStorageCap = pe.Constraint(m.HYDROGEN_PLANTS, rule = maxStorageCap_rule)
-        
-        def hydrogenBalance_rule(m,t,i):
-            return m.hydrogen_direct[t,i] + m.from_storage[t,i] \
-                    + m.hydrogen_import[t,i] + m.hydrogen_import_ccs[t,i] \
-                    == m.H2_load[t,i]*m.H2_load_scaling
-        m.hydrogenBalance = pe.Constraint(m.TIME, m.HYDROGEN_PLANTS, rule = hydrogenBalance_rule)
-        
-        
-#        def elecCap_rule(m,t,i):
-#            j = m.ELECTROLYSIS_AT_H2PLANT[i]
-#            return m.H2_direct_eff*m.hydrogen_direct[t,i] \
-#                    + m.H2_storage_eff*m.hydrogen_to_storage[t,i] <= m.new_cap[j]
-#        m.elecCap = pe.Constraint(m.TIME, m.HYDROGEN_PLANTS, rule = elecCap_rule)
-        
-#        def maxElecCap_rule(m,i):
-#            return m.elec_cap_new[i]  <= m.Elec_cap_max[i]
-#        m.maxElecCap = pe.Constraint(m.HYDROGEN_PLANTS, rule = maxElecCap_rule)
+        def maxProd_rule(m,t,i):
+            return m.from_storage[t,i]  <= m.P_max_hydro[i]
+        m.maxProd = pe.Constraint(m.TIME ,m.HYDRO_POWER_PLANTS,
+                                  rule = maxProd_rule)        
         
         # Energy balance
         def energyBalance_rule(m,t,i):
-            if (i in m.H2PLANT_AT_NODE.keys()) and (i in m.BATTERY_AT_NODE.keys()):
-                return sum(m.prod[t,j] for j in m.GEN_AT_NODE[i]) \
-                        + m.rat[t,i] + m.imp[t,i] - m.exp[t,i] \
-                        == sum(m.Load[t,j] for j in m.LOAD_AT_NODE[i]) \
-                        + sum(m.H2_direct_eff*m.hydrogen_direct[t,j] \
-                        + m.H2_storage_eff*m.to_storage[t,j]
-                        for j in m.H2PLANT_AT_NODE[i]) \
-                        + sum(m.Battery_in_ratio*m.to_storage[t,j] \
-                        - m.Battery_out_ratio*m.from_storage[t,j]
-                        for j in m.BATTERY_AT_NODE[i])
-            elif  (i in m.H2PLANT_AT_NODE.keys()):
-                return sum(m.prod[t,j] for j in m.GEN_AT_NODE[i]) \
-                        + m.rat[t,i] + m.imp[t,i] - m.exp[t,i] \
-                        == sum(m.Load[t,j] for j in m.LOAD_AT_NODE[i]) \
-                        + sum(m.H2_direct_eff*m.hydrogen_direct[t,j] \
-                        + m.H2_storage_eff*m.to_storage[t,j]
-                        for j in m.H2PLANT_AT_NODE[i])
-            elif (i in m.BATTERY_AT_NODE.keys()):
-                return sum(m.prod[t,j] for j in m.GEN_AT_NODE[i]) \
-                        + m.rat[t,i] + m.imp[t,i] - m.exp[t,i] \
-                        == sum(m.Load[t,j] for j in m.LOAD_AT_NODE[i]) \
-                        + sum(m.Battery_in_ratio*m.to_storage[t,j] \
-                        - m.Battery_out_ratio*m.from_storage[t,j]
-                        for j in m.BATTERY_AT_NODE[i])
+            return sum(m.prod[t,j] for j in m.GEN_AT_BUS[i] if j in m.WIND_POWER_PLANTS) \
+                    + sum(m.from_storage[t,j] for j in m.EL_STORAGE_AT_BUS[i]) \
+                    + m.rat[t,i] + m.imp[t,i] - m.exp[t,i]  \
+                    == m.Electric_demand[t,i] \
+                    + sum(m.to_storage[t,j] for j in m.STORAGE_AT_BUS[i]) \
+                    + sum(m.direct[t,j] for j in m.H2_STORAGE_AT_BUS[i])
+        m.energyBalance = pe.Constraint(m.TIME, m.NORMAL_BUS, rule = energyBalance_rule)
+            
+        # hydrogen balance
+        def h2Balance_rule(m,t,i):
+            return m.Direct_eff[i]*m.direct[t,i] + m.from_storage[t,i] \
+                    + m.h2_import[t,i]  + m.hydrogen_import_ccs[t,i] == m.Hydrogen_demand[t,i]*m.H2_load_scaling
+        m.h2Balance = pe.Constraint(m.TIME, m.HYDROGEN_PLANTS,
+                                          rule = h2Balance_rule)
+        
+        # storage 
+        def storageBalance_rule(m,t,i):
+            if pe.value(t) == 0:
+                return m.storage[t,i] == \
+                        m.Initial_storage[i]*m.storage_energy_cap[i] + m.Inflow[t,i] \
+                        + m.To_storage_eff[i]*m.to_storage[t,i] \
+                        - m.From_storage_eff[i]*m.from_storage[t,i] \
+                        - m.spill[t,i]
             else:
-                return sum(m.prod[t,j] for j in m.GEN_AT_NODE[i]) \
-                        + m.rat[t,i] + m.imp[t,i] - m.exp[t,i] \
-                        == sum(m.Consumer_load[t,j] for j in m.LOAD_AT_NODE[i]) 
+                return m.storage[t,i] == m.storage[t-1,i] + m.Inflow[t,i]\
+                        + m.To_storage_eff[i]*m.to_storage[t,i] \
+                        - m.From_storage_eff[i]*m.from_storage[t,i] \
+                        - m.spill[t,i]
+        m.storageBalance = pe.Constraint(m.TIME, m.STORAGE,
+                                     rule = storageBalance_rule )
+        
+        def storageEnergyCap_rule(m,t,i):
+            return m.storage[t,i] <= m.storage_energy_cap[i]
+        m.storageEnergyCap = pe.Constraint(m.TIME, m.STORAGE,
+                                 rule = storageEnergyCap_rule)
+        
+        def spillCap_rule(m,t,i):
+            return m.spill[t,i] <= m.Max_spillage[t,i]
+        m.spillCap = pe.Constraint(m.TIME, m.STORAGE,
+                                   rule = spillCap_rule)
+        
+        def minProd_rule(m,t,i):
+            return m.from_storage[t,i] + m.spill[t,i]  >= m.Inflow_ureg[t,i]
+        m.minProd = pe.Constraint(m.TIME, m.STORAGE, rule = minProd_rule)       
 
-        m.energyBalance = pe.Constraint(m.TIME, m.NODES, rule = energyBalance_rule)
-             
+        def storagePowerCap_rule(m,t,i):
+            return m.direct[t,i] + m.to_storage[t,i] + m.from_storage[t,i] \
+                        <=  m.storage_power_cap[i]
+        m.storagePowerCap = pe.Constraint(m.TIME, m.STORAGE,
+                                  rule = storagePowerCap_rule)    
+        
+        
         # DC power flow
         def referenceNode_rule(m,t):
             return m.voltage_angle[t,m.NODES[1]] == 0.0
