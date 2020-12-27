@@ -16,3 +16,7 @@
 *.txt
 *.cst
 *.pyc
+*.pkl
+*.h5
+*.mps
+*.log
