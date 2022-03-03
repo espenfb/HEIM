@@ -1,0 +1,4 @@
+Type,power unit,energy unit,Inv power ($/pu-yr),Inv energy ($/eu-yr),Fix power ($/pu-yr),Fix energy ($/eu-yr),Var pow ($/eu),Emission (kg/eu),Typical Plant Size (pu),Min Gen (pu),Ramp (%/h),Start ($/pu),Out (MWh/eu),In (MWh/eu),Direct (MWh/eu),New Energy Max (eu)
+Battery,MW,MWh,18140,5410,6825,2100,0,0,20,0,1,0 ,0.95,1.05,0.0,10000
+Hydrogen,kg/h,kg,2365.2,30,2014.8,2,0.01,0,2000,0,1,0,0,0.05305,0.0502,10000000
+Hydro Power,MW,MWh,,,,,,,,0,1,0,1.0,0.0,0.0,0

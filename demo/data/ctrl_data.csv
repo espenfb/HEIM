@@ -1,0 +1,14 @@
+type,                   file
+bus,                    bus_data.csv
+line,                   lines_and_pipes_aggr_2tier.csv
+installed,              installed_cap_needs_mod.csv
+installed_energy,       installed_energy.csv
+max_num_plants,         max_num_plants2.csv
+renewable_pot,          renewable_pot.csv
+plant_char,             plant_char_recal.csv
+storage_char,           storage_char_mod.csv
+retirement_cost,        retirement_cost2.csv
+hydrogen_load,          hydrogen_load_fixed.csv
+series,                 data_series.csv
+parameters,             parameters.csv
+hydrogen_ng,            hydrogen_ng.csv

@@ -1,0 +1,6 @@
+seriesNr,   type,            size,   scale,   year,      file_type,  start_pos,  tab,    path
+0,          load,            8760,   1,       2050,      csv,        ,           ,       Series/bus_loads_2050.csv
+1,          solar,	         8760,   1,       2050,      csv,        ,           ,       Series/solar_profiles_adj.csv
+2,          wind,            8760,   1,       2050,      csv,        ,           ,       Series/pot_wind_profile.csv
+3,          inst_wind,       8760,   1,       2050,      csv,        ,           ,       Series/inst_wind_profile.csv
+4,          offshore_wind,   8760,   1,       2050,      csv,        ,           ,       Series/pot_wind_profile.csv
