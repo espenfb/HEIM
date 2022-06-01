@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 filepath = os.path.abspath('')
-sys.path.append(str(Path(filepath) / "src"))
+sys.path.append(str(Path(filepath).parent / "src"))
 
 import detInvModel as dim
 import pandas as pd
