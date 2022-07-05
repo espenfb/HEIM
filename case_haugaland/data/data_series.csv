@@ -1,0 +1,10 @@
+seriesNr,   type,               size,   scale,   year,      file_type,  start_pos,  tab,    path
+0,          load,               8760,   1,       2019,      csv,        ,           ,       Series/load_series.csv
+1,          wind,               8760,   1,       2019,      csv,        ,           ,       Series/pot_wind_profiles.csv
+2,          inst_wind,          8760,   1,       2019,      csv,        ,           ,       Series/inst_wind_profiles.csv
+4,          solar,              8760,   1,       2019,      csv,        ,           ,       Series/solar_profiles.csv
+5,          offshore_wind,      8760,   1,       2019,      csv,        ,           ,       Series/offshore_wind_series.csv
+6,          inflow_series,      8760,   1,       2019,      csv,        ,           ,       Series/inflow_series.csv
+7,          inflow_series_ureg, 8760,   1,       2019,      csv,        ,           ,       Series/inflow_series_ureg.csv
+8,          import_price,       8760,   1,       2019,      csv,        ,           ,       Series/import_price_utc.csv
+9,          export_price,       8760,   1,       2019,      csv,        ,           ,       Series/export_price_utc.csv

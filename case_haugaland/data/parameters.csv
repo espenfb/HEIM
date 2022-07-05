@@ -1,0 +1,2 @@
+ref_power,   rat_cost, CO2_cost,   spill_cost,  drain_cost,  fill_cost,   H2_scaling, NG price ($/mmBtu), CCS cost ($/kg)
+1,           10000,    0.06,       1,           0.5,         0.5,         1.0,        5.24,               0.011
