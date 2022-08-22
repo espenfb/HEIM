@@ -21,7 +21,7 @@ time_data = {
 'end_date': pd.Timestamp(year = 2016, month = 1, day = 1),
 'ref_date': pd.Timestamp(year = 2015, month = 1, day = 1)}
 dirs = {
-'data_dir' : "demo\\data\\",
+'data_dir' : "data\\",
 'ctrl_data_file' : 'ctrl_data.csv',
 'res_dir' : 'results\\'}
 

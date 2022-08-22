@@ -84,6 +84,7 @@ def detData(obj):
 
     # Define unit sets
     installed = copy.copy(obj.data.installed)
+    renewable_pot = copy.copy(obj.data.renewable_pot)
 
     plant_char = copy.copy(obj.data.plant_char)
     plant_char.set_index('Type', inplace=True)
@@ -101,6 +102,9 @@ def detData(obj):
     thermal_plants = \
         plant_char.index[obj.data.plant_char.Class.isin(['TH', 'H2TH'])]
     di['THERMAL_PLANT_TYPES'] = {None: thermal_plants.to_list()}
+    renewable_plants = \
+        plant_char.index[obj.data.plant_char.Class.isin(['RE'])]
+    di['RENEWABLE_PLANT_TYPES'] = {None: renewable_plants.to_list()}
     hydrogen_plants = \
         plant_char.index[obj.data.plant_char.Class.isin(['H2'])]
     di['HYDROGEN_PLANT_TYPES'] = {None: hydrogen_plants.to_list()}
@@ -130,6 +134,7 @@ def detData(obj):
     di['TYPE_TO_THERMAL_PLANTS'] = {}
     di['TYPE_TO_CONV_PLANTS'] = {}
     di['PLANTS'] = {None: []}
+    plant_buses_type = {}
     for k in di['PLANT_TYPES'][None]:
         if k in di['POWER_PLANT_TYPES'][None]:
             class_type = '_POWER_PLANTS'
@@ -139,8 +144,20 @@ def detData(obj):
             class_type = '_STORAGE'
 
         set_name = k.replace(' ', '_').upper() + class_type
-        di[set_name] = {None: [obj.type2prefix[k] + '%.2d' %
-                               i for i in dual_buses.Bus.tolist()]}
+        if k in (['Hydro'] + di['RENEWABLE_PLANT_TYPES'][None]):
+            # Plants that are created for only buses where cap exist
+            #  or potential is explicitly defined
+            exist = installed[k].notna()
+            potential = renewable_pot[k].notna()
+            to_include = pd.concat([exist, potential], axis=1).any(axis=1)
+            plant_buses_type[k] = installed["Bus"][to_include].values
+            di[set_name] = {None: [obj.type2prefix[k] + '%.2d' %
+                                   i for i in plant_buses_type[k]]}
+        else:
+            # Plants that are created for all dual buses,
+            # potential is assumed everywhere
+            di[set_name] = {None: [obj.type2prefix[k] + '%.2d' %
+                                   i for i in dual_buses.Bus.tolist()]}
         di['PLANTS'][None] += [obj.type2prefix[k] + '%.2d' %
                                i for i in dual_buses.Bus.tolist()]
 
@@ -288,7 +305,8 @@ def detData(obj):
     init_energy = init_energy.stack().to_dict()
     init_energy_dict = {'%s%.2d' % (obj.type2prefix[j], i):
                         init_energy[i, j] for i, j in init_energy.keys()}
-
+    init_energy_dict = {k: v for (k, v) in init_energy_dict.items()
+                        if k in di["STORAGE"]} # filter for storage items
     di['Init_energy'] = init_energy_dict
 
     ramp_rate = copy.copy(plant_char['Ramp (%/h)'])
@@ -370,19 +388,24 @@ def detData(obj):
     solar_series = copy.copy(obj.data.solar_series)
     solar_series = solar_series[solar_series.index.isin(obj.time)]
     solar_series.index = pd.Index(np.arange(len(solar_series.index)))
-    solar_series.rename(columns={i: obj.type2prefix['Solar'] + '%.2d' % int(i)
-                                 for i in solar_series.columns.tolist()},
+    solar_series.rename(columns={str(i): obj.type2prefix['Solar'] + '%.2d' % int(i)
+                                 for i in plant_buses_type["Solar"]},
                         level=0, inplace=True)
     solar_series[solar_series < 0] = 0.0
+    include_plants = di["SOLAR_POWER_PLANTS"][None]
+    solar_series = solar_series[include_plants]
     di['Renewable_profile'] = solar_series.round(4).stack(level=0).to_dict()
 
     wind_series = copy.copy(obj.data.wind_series)
     wind_series = wind_series[wind_series.index.isin(obj.time)]
     wind_series.index = np.arange(len(wind_series.index))
-    wind_series.rename(columns={i: obj.type2prefix['Onshore Wind']
+    wind_series.rename(columns={str(i): obj.type2prefix['Onshore Wind']
                        + '%.2d' % int(i)
-                       for i in wind_series.columns.tolist()}, inplace=True)
+                       for i in plant_buses_type["Onshore Wind"]},
+                       inplace=True)
     wind_series[wind_series < 0] = 0.0
+    include_plants = di["ONSHORE_WIND_POWER_PLANTS"][None]
+    wind_series = wind_series[include_plants]
     di['Renewable_profile'].update(wind_series.round(
         4).fillna(0).unstack().swaplevel().to_dict())
 
@@ -391,23 +414,25 @@ def detData(obj):
         offshore_wind_series[offshore_wind_series.index.isin(obj.time)]
     offshore_wind_series.index = np.arange(len(offshore_wind_series.index))
     offshore_wind_series.rename(
-        columns={i: obj.type2prefix['Offshore Wind'] + '%.2d' % int(i)
-                 for i in offshore_wind_series.columns.tolist()},
+        columns={str(i): obj.type2prefix['Offshore Wind'] + '%.2d' % int(i)
+                 for i in plant_buses_type["Offshore Wind"]},
         inplace=True)
     offshore_wind_series[offshore_wind_series < 0] = 0.0
+    include_plants = di["OFFSHORE_WIND_POWER_PLANTS"][None]
+    offshore_wind_series = offshore_wind_series[include_plants]
     di['Renewable_profile'].update(offshore_wind_series.round(
         4).fillna(0).unstack().swaplevel().to_dict())
 
-    inst_wind_series = copy.copy(obj.data.inst_wind_series)
-    inst_wind_series = inst_wind_series[inst_wind_series.index.isin(obj.time)]
-    inst_wind_series.index = np.arange(len(inst_wind_series.index))
-    inst_wind_series.rename(
-        columns={i: obj.type2prefix['Onshore Wind'] + '%.2d' % int(i)
-                 for i in inst_wind_series.columns.tolist()},
-        inplace=True)
-    inst_wind_series[inst_wind_series < 0] = 0.0
-    di['Inst_profile'] = inst_wind_series.round(
-        4).fillna(0).unstack().swaplevel().to_dict()
+    #inst_wind_series = copy.copy(obj.data.inst_wind_series)
+    #inst_wind_series = inst_wind_series[inst_wind_series.index.isin(obj.time)]
+    #inst_wind_series.index = np.arange(len(inst_wind_series.index))
+    #inst_wind_series.rename(
+    #    columns={i: obj.type2prefix['Onshore Wind'] + '%.2d' % int(i)
+    #             for i in inst_wind_series.columns.tolist()},
+    #    inplace=True)
+    #inst_wind_series[inst_wind_series < 0] = 0.0
+    #di['Inst_profile'] = inst_wind_series.round(
+    #    4).fillna(0).unstack().swaplevel().to_dict()
 
     if hasattr(obj.data, 'inflow_series'):
         inflow_series = copy.copy(obj.data.inflow_series)
@@ -415,31 +440,36 @@ def detData(obj):
         inflow_series = inflow_series[inflow_series.index.isin(
             di['TIME'][None])]
         inflow_series.rename(
-            columns={i: obj.type2prefix['Hydro'] + '%.2d' % int(i)
-                     for i in inflow_series.columns.tolist()},
+            columns={str(i): obj.type2prefix['Hydro'] + '%.2d' % int(i)
+                     for i in plant_buses_type["Hydro"]},
             inplace=True)
         inflow_series[inflow_series < 0] = 0.0
+        #include_plants = di["HYDRO_STORAGE"][None]
+        #inflow_series = inflow_series[include_plants]
         di['Inflow'] = inflow_series.round(4).fillna(
             0).unstack().swaplevel().to_dict()
+    else:
+        di['Inflow'] = {}
 
+    if hasattr(obj.data, 'inflow_series'):
         inflow_ureg_series = copy.copy(obj.data.inflow_ureg_series)
         inflow_ureg_series.index = np.arange(len(inflow_ureg_series.index))
         inflow_ureg_series = inflow_ureg_series[inflow_ureg_series.index.isin(
             di['TIME'][None])]
         inflow_ureg_series.rename(
-            columns={i: obj.type2prefix['Hydro'] + '%.2d' % int(i)
-                     for i in inflow_ureg_series.columns.tolist()},
+            columns={str(i): obj.type2prefix['Hydro'] + '%.2d' % int(i)
+                     for i in plant_buses_type["Hydro"]},
             inplace=True)
         inflow_ureg_series[inflow_ureg_series < 0] = 0.0
+        #include_plants = di["HYDRO_STORAGE"][None]
+        #inflow_ureg_series = inflow_ureg_series[include_plants]
         di['Inflow_ureg'] = inflow_ureg_series.round(
             4).fillna(0).unstack().swaplevel().to_dict()
     else:
-        di['Inflow'] = {}
         di['Inflow_ureg'] = {}
 
-    renewable_pot = copy.copy(obj.data.renewable_pot)
     renewable_pot.set_index('Bus', inplace=True)
-    renewable_pot.fillna(0, inplace=True)
+    #renewable_pot.fillna(0, inplace=True)
     renewable_pot = renewable_pot.stack().to_dict()
     renewable_pot_dict = {'%s%.2d' % (obj.type2prefix[j], i):
                           renewable_pot[i, j]

@@ -44,6 +44,7 @@ def buildDetModel(mutables={}):
 
     m.PLANT_TYPES = pe.Set()
     m.THERMAL_PLANT_TYPES = pe.Set()
+    m.RENEWABLE_PLANT_TYPES = pe.Set()
     m.STORAGE_TYPES = pe.Set()
     m.CONV_TYPES = pe.Set()
 
@@ -135,13 +136,13 @@ def buildDetModel(mutables={}):
     m.Renewable_profile = pe.Param(m.TIME, m.RENEWABLE_POWER_PLANTS,
                                    within=pe.NonNegativeReals,
                                    default=0)
-    m.Inst_profile = pe.Param(m.TIME, m.ONSHORE_WIND_POWER_PLANTS,
-                              within=pe.NonNegativeReals,
-                              default=0)
-    m.Inflow = pe.Param(m.TIME, m.STORAGE, within=pe.NonNegativeReals,
+    #m.Inst_profile = pe.Param(m.TIME, m.ONSHORE_WIND_POWER_PLANTS,
+    #                          within=pe.NonNegativeReals,
+    #                          default=0)
+    m.Inflow = pe.Param(m.TIME, m.HYDRO_STORAGE, within=pe.NonNegativeReals,
                         default=0)
     m.Inflow_ureg = pe.Param(
-            m.TIME, m.STORAGE, within=pe.NonNegativeReals, default=0)
+        m.TIME, m.HYDRO_STORAGE, within=pe.NonNegativeReals, default=0)
     m.Conv_rate = pe.Param(m.CONV_PLANTS, within=pe.NonNegativeReals)
     m.Aux_rate = pe.Param(m.STORAGE, within=pe.NonNegativeReals)
 
@@ -214,25 +215,6 @@ def buildDetModel(mutables={}):
         return m.prod[t, i] >= m.Min_prod[i]*m.state[t, i]
     m.minProd = pe.Constraint(m.TIME, m.GEN_PLANTS, rule=minProd_rule)
 
-    def newHydroPower_rule(m, i):
-        return m.new_power[i] == 0.0
-    m.newHydroPower = pe.Constraint(
-            m.HYDRO_STORAGE, rule=newHydroPower_rule)
-
-    def newHydroEnergy_rule(m, i):
-        return m.new_energy[i] == 0.0
-    m.newHydroEnergy = pe.Constraint(
-            m.HYDRO_STORAGE, rule=newHydroEnergy_rule)
-
-    def minHydroProd_rule(m, t, i):
-        return m.from_storage[t, i] + m.spill[t, i] >= m.Inflow_ureg[t, i]
-    m.minHydroProd = pe.Constraint(
-            m.TIME, m.HYDRO_STORAGE, rule=minHydroProd_rule)
-
-    #        def startUp_rule(m,t,i):
-    #            return m.state[t,i] == m.state[t-1,i] + m.start_up[t,i] - m.shut_down[t,i]
-    #        m.startUp = pe.Constraint(m.TIME,m.THERMAL_POWER_PLANTS, rule = startUp_rule)
-
     def rampUpLimit_rule(m, t, i):
         if pe.value(t) > 0:
             return m.prod[t, i] - m.prod[t-1, i] <= \
@@ -250,26 +232,31 @@ def buildDetModel(mutables={}):
     m.rampDownLimit = pe.Constraint(m.TIME, m.GEN_PLANTS,
                                     rule=rampDownLimit_rule)
 
+    # RENEWABLES
     def renewableResourceLimit_rule(m, i):
         return m.new_power[i] <= m.Renewable_pot[i]
     m.renewableResourceLimit = pe.Constraint(
             m.RENEWABLE_POWER_PLANTS, rule=renewableResourceLimit_rule)
 
-    # Renewable power balance
     def renewableBalance_rule(m, t, i):
-        if i in m.ONSHORE_WIND_POWER_PLANTS:
-            return m.prod[t, i] + m.cur[t, i] == \
-                m.Inst_profile[t, i]*m.Init_power[i] \
-                + m.Renewable_profile[t, i]*m.new_power[i]         
-        else:
-            return m.prod[t, i] + m.cur[t, i] == \
-                m.Renewable_profile[t, i]*(m.Init_power[i] + m.new_power[i])
+        # if i in m.ONSHORE_WIND_POWER_PLANTS:
+        #    return m.prod[t, i] + m.cur[t, i] == \
+        #        m.Inst_profile[t, i]*m.Init_power[i] \
+        #        + m.Renewable_profile[t, i]*m.new_power[i]     
+        # else:
+        return m.prod[t, i] + m.cur[t, i] == \
+            m.Renewable_profile[t, i]*(m.Init_power[i] + m.new_power[i])
     m.renewableBalance = pe.Constraint(m.TIME, m.RENEWABLE_POWER_PLANTS,
                                        rule=renewableBalance_rule)
+
+    #        def startUp_rule(m,t,i):
+    #            return m.state[t,i] == m.state[t-1,i] + m.start_up[t,i] - m.shut_down[t,i]
+    #        m.startUp = pe.Constraint(m.TIME,m.THERMAL_POWER_PLANTS, rule = startUp_rule)
 
     #       Storage plants
     # Storage loss occurs at the storage side and is represented by a
     # efficiency, eta = (1-loss) where eta^in = eat^out = sqrt(eta)
+
     def storageBalance_rule(m, t, i):
         if t == 0:
             return m.storage[t, i] == \
@@ -310,7 +297,23 @@ def buildDetModel(mutables={}):
     #     return m.new_energy[i]  <= m.Energy_max[i]
     # m.maxStorageCap = pe.Constraint(m.STORAGE, rule = maxStorageCap_rule)
 
-    # Energy balance
+    # HYDROPOWER
+    def newHydroPower_rule(m, i):
+        return m.new_power[i] == 0.0
+    m.newHydroPower = pe.Constraint(
+            m.HYDRO_STORAGE, rule=newHydroPower_rule)
+
+    def newHydroEnergy_rule(m, i):
+        return m.new_energy[i] == 0.0
+    m.newHydroEnergy = pe.Constraint(
+            m.HYDRO_STORAGE, rule=newHydroEnergy_rule)
+
+    def minHydroProd_rule(m, t, i):
+        return m.from_storage[t, i] + m.spill[t, i] >= m.Inflow_ureg[t, i]
+    m.minHydroProd = pe.Constraint(
+            m.TIME, m.HYDRO_STORAGE, rule=minHydroProd_rule)
+
+    # NODES
     def energyBalance_rule(m, t, i):
         return sum(m.prod[t, j] for j in m.GEN_AT_NODE[i]) \
             + sum(m.from_storage[t, j] - m.to_storage[t, j]
@@ -322,6 +325,14 @@ def buildDetModel(mutables={}):
                   for j in m.AUX_POWER_AT_NODE[i])
     m.energyBalance = pe.Constraint(
             m.TIME, m.INTERNAL_NODES, rule=energyBalance_rule)
+
+    def nodalBalance_rule(m, t, i):
+        return m.imp[t, i] - m.exp[t, i] == \
+            sum(m.Branch_dir_at_node[i, j]*m.branch_flow[t, j]
+                for j in m.BRANCHES_AT_NODE[i])
+    m.nodalBalance = pe.Constraint(m.TIME, m.NODES, rule=nodalBalance_rule)
+
+    # BRANCHES
 
     # DC power flow
     #        def referenceNode_rule(m,t):
@@ -361,14 +372,8 @@ def buildDetModel(mutables={}):
         pe.Constraint(m.TIME, m.NEW_BRANCHES,
                       rule=newBranchFlowLowerLimit_rule)
 
-    def nodalBalance_rule(m, t, i):
-        return m.imp[t, i] - m.exp[t, i] == \
-            sum(m.Branch_dir_at_node[i, j]*m.branch_flow[t, j]
-                for j in m.BRANCHES_AT_NODE[i])
-    m.nodalBalance = pe.Constraint(m.TIME, m.NODES, rule=nodalBalance_rule)
-
+    # OBJECTIVE
     # define cost components
-
     def plant_inv_cost(m):
         return sum(
                 sum(m.Power_cost[j]*m.new_power[i]
@@ -402,8 +407,8 @@ def buildDetModel(mutables={}):
         return sum(m.Rationing_cost*m.rat[t, i] for i in m.INTERNAL_NODES)
 
     def market_cost(m, t):
-        return sum(m.Import_price[t, i]*m.exp[t, i]
-                   - m.Export_price[t, i]*m.imp[t, i] for i in m.MARKET_NODES)
+        return sum(m.Export_price[t, i]*m.imp[t, i]
+                   - m.Import_price[t, i]*m.exp[t, i] for i in m.MARKET_NODES)
 
     # add cost components to objective function
 

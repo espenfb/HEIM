@@ -69,7 +69,7 @@ class deterministicModel(object):
     def solve(self, printOutput=True):
 
         # Connect to solver
-        self.opt = pe.SolverFactory('gurobi', solver_io='python')
+        self.opt = pe.SolverFactory('cplex')  #, solver_io='python')
 
         if printOutput:
             print('Solving deterministic operation model...')
@@ -77,14 +77,14 @@ class deterministicModel(object):
         # Solve model
         start_time = time.time()
         self.pyomo_res = \
-            self.opt.solve(self.instance,
-                           tee=printOutput,  # stream the solver output
-                           keepfiles=False,  # print the LP file - debugging
-                           symbolic_solver_labels=True,
-                           warmstart=True,
-                           options={"Method": 2,
-                                    "Crossover": 0,
-                                    "BarHomogeneous": 1})
+            self.opt.solve(self.instance) ##,
+        #                   tee=printOutput)  # stream the solver output
+        #                   keepfiles=False,  # print the LP file - debugging
+        #                   symbolic_solver_labels=True,
+        #                   warmstart=True,
+        #                   options={"Method": 2,
+        #                            "Crossover": 0,
+        #                            "BarHomogeneous": 1})
         #                       "QCPDual":0})#,
         #                       "NodeMethod": 2,
         #                       "MIPGap": 0.01,
