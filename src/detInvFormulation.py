@@ -139,17 +139,17 @@ def buildDetModel(mutables={}):
     #m.Inst_profile = pe.Param(m.TIME, m.ONSHORE_WIND_POWER_PLANTS,
     #                          within=pe.NonNegativeReals,
     #                          default=0)
-    m.Inflow = pe.Param(m.TIME, m.HYDRO_STORAGE, within=pe.NonNegativeReals,
+    m.Inflow = pe.Param(m.TIME, m.STORAGE, within=pe.NonNegativeReals,
                         default=0)
     m.Inflow_ureg = pe.Param(
-        m.TIME, m.HYDRO_STORAGE, within=pe.NonNegativeReals, default=0)
+        m.TIME, m.STORAGE, within=pe.NonNegativeReals, default=0)
     m.Conv_rate = pe.Param(m.CONV_PLANTS, within=pe.NonNegativeReals)
     m.Aux_rate = pe.Param(m.STORAGE, within=pe.NonNegativeReals)
 
     m.Load_scaling = pe.Param(m.NODES, within=pe.NonNegativeReals, default=1,
                               mutable=mutable_dict['H2_load_scaling'])
 
-    m.Initial_storage = pe.Param(m.STORAGE, within=pe.NonNegativeReals,
+    m.Init_storage = pe.Param(m.STORAGE, within=pe.NonNegativeReals,
                                  default=0)
 
     m.Eff_in = pe.Param(m.STORAGE, within=pe.NonNegativeReals)
@@ -260,7 +260,7 @@ def buildDetModel(mutables={}):
     def storageBalance_rule(m, t, i):
         if t == 0:
             return m.storage[t, i] == \
-                m.Initial_storage[i]*(m.Init_energy[i] + m.new_energy[i]) \
+                m.Init_storage[i]*(m.Init_energy[i] + m.new_energy[i]) \
                 + m.Eff_in[i]*m.to_storage[t, i] \
                 - m.from_storage[t, i]/m.Eff_out[i] + m.Inflow[t, i] \
                 + m.Inflow_ureg[t, i] - m.spill[t, i]
@@ -274,7 +274,7 @@ def buildDetModel(mutables={}):
 
     def endStorage_rule(m, t, i):
         return m.storage[t, i] == \
-            m.Initial_storage[i]*(m.Init_energy[i] + m.new_energy[i])
+            m.Init_storage[i]*(m.Init_energy[i] + m.new_energy[i])
     m.endStorage = pe.Constraint(
             m.LAST_TIME, m.STORAGE, rule=endStorage_rule)
 
@@ -407,8 +407,8 @@ def buildDetModel(mutables={}):
         return sum(m.Rationing_cost*m.rat[t, i] for i in m.INTERNAL_NODES)
 
     def market_cost(m, t):
-        return sum(m.Export_price[t, i]*m.imp[t, i]
-                   - m.Import_price[t, i]*m.exp[t, i] for i in m.MARKET_NODES)
+        return sum(m.Import_price[t, i]*m.exp[t, i]
+                   - m.Export_price[t, i]*m.imp[t, i] for i in m.MARKET_NODES)
 
     # add cost components to objective function
 

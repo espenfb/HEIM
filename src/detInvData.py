@@ -134,7 +134,7 @@ def detData(obj):
     di['TYPE_TO_THERMAL_PLANTS'] = {}
     di['TYPE_TO_CONV_PLANTS'] = {}
     di['PLANTS'] = {None: []}
-    plant_buses_type = {}
+    obj.plant_buses_type = {}
     for k in di['PLANT_TYPES'][None]:
         if k in di['POWER_PLANT_TYPES'][None]:
             class_type = '_POWER_PLANTS'
@@ -150,9 +150,9 @@ def detData(obj):
             exist = installed[k].notna()
             potential = renewable_pot[k].notna()
             to_include = pd.concat([exist, potential], axis=1).any(axis=1)
-            plant_buses_type[k] = installed["Bus"][to_include].values
+            obj.plant_buses_type[k] = installed["Bus"][to_include].values
             di[set_name] = {None: [obj.type2prefix[k] + '%.2d' %
-                                   i for i in plant_buses_type[k]]}
+                                   i for i in obj.plant_buses_type[k]]}
         else:
             # Plants that are created for all dual buses,
             # potential is assumed everywhere
@@ -299,14 +299,16 @@ def detData(obj):
         obj.type2prefix[j], i): init_cap[i, j] for i, j in init_cap.keys()}
     di['Init_power'] = init_cap_dict
 
+    GW2MW = 1E3
+
     init_energy = copy.copy(obj.data.installed_energy)
     init_energy.set_index('Bus', inplace=True)
     init_energy.fillna(0, inplace=True)
     init_energy = init_energy.stack().to_dict()
     init_energy_dict = {'%s%.2d' % (obj.type2prefix[j], i):
                         init_energy[i, j] for i, j in init_energy.keys()}
-    init_energy_dict = {k: v for (k, v) in init_energy_dict.items()
-                        if k in di["STORAGE"]} # filter for storage items
+    init_energy_dict = {k: v*GW2MW for (k, v) in init_energy_dict.items()
+                        if k in di["STORAGE"][None]}  # filter for storage items
     di['Init_energy'] = init_energy_dict
 
     ramp_rate = copy.copy(plant_char['Ramp (%/h)'])
@@ -389,7 +391,7 @@ def detData(obj):
     solar_series = solar_series[solar_series.index.isin(obj.time)]
     solar_series.index = pd.Index(np.arange(len(solar_series.index)))
     solar_series.rename(columns={str(i): obj.type2prefix['Solar'] + '%.2d' % int(i)
-                                 for i in plant_buses_type["Solar"]},
+                                 for i in obj.plant_buses_type["Solar"]},
                         level=0, inplace=True)
     solar_series[solar_series < 0] = 0.0
     include_plants = di["SOLAR_POWER_PLANTS"][None]
@@ -401,7 +403,7 @@ def detData(obj):
     wind_series.index = np.arange(len(wind_series.index))
     wind_series.rename(columns={str(i): obj.type2prefix['Onshore Wind']
                        + '%.2d' % int(i)
-                       for i in plant_buses_type["Onshore Wind"]},
+                       for i in obj.plant_buses_type["Onshore Wind"]},
                        inplace=True)
     wind_series[wind_series < 0] = 0.0
     include_plants = di["ONSHORE_WIND_POWER_PLANTS"][None]
@@ -415,7 +417,7 @@ def detData(obj):
     offshore_wind_series.index = np.arange(len(offshore_wind_series.index))
     offshore_wind_series.rename(
         columns={str(i): obj.type2prefix['Offshore Wind'] + '%.2d' % int(i)
-                 for i in plant_buses_type["Offshore Wind"]},
+                 for i in obj.plant_buses_type["Offshore Wind"]},
         inplace=True)
     offshore_wind_series[offshore_wind_series < 0] = 0.0
     include_plants = di["OFFSHORE_WIND_POWER_PLANTS"][None]
@@ -434,39 +436,50 @@ def detData(obj):
     #di['Inst_profile'] = inst_wind_series.round(
     #    4).fillna(0).unstack().swaplevel().to_dict()
 
-    if hasattr(obj.data, 'inflow_series'):
-        inflow_series = copy.copy(obj.data.inflow_series)
-        inflow_series.index = np.arange(len(inflow_series.index))
-        inflow_series = inflow_series[inflow_series.index.isin(
-            di['TIME'][None])]
-        inflow_series.rename(
-            columns={str(i): obj.type2prefix['Hydro'] + '%.2d' % int(i)
-                     for i in plant_buses_type["Hydro"]},
-            inplace=True)
-        inflow_series[inflow_series < 0] = 0.0
-        #include_plants = di["HYDRO_STORAGE"][None]
-        #inflow_series = inflow_series[include_plants]
-        di['Inflow'] = inflow_series.round(4).fillna(
-            0).unstack().swaplevel().to_dict()
-    else:
-        di['Inflow'] = {}
 
-    if hasattr(obj.data, 'inflow_series'):
+    # Unregulated part of inflow
+    if hasattr(obj.data, 'inflow_ureg_series'):
         inflow_ureg_series = copy.copy(obj.data.inflow_ureg_series)
         inflow_ureg_series.index = np.arange(len(inflow_ureg_series.index))
         inflow_ureg_series = inflow_ureg_series[inflow_ureg_series.index.isin(
             di['TIME'][None])]
         inflow_ureg_series.rename(
             columns={str(i): obj.type2prefix['Hydro'] + '%.2d' % int(i)
-                     for i in plant_buses_type["Hydro"]},
+                     for i in obj.plant_buses_type["Hydro"]},
             inplace=True)
         inflow_ureg_series[inflow_ureg_series < 0] = 0.0
-        #include_plants = di["HYDRO_STORAGE"][None]
-        #inflow_ureg_series = inflow_ureg_series[include_plants]
+        include_plants = di["STORAGE"][None]
+        for p in include_plants:
+            if p not in inflow_ureg_series.columns:
+                inflow_ureg_series.loc[:, p] = 0.0
+        inflow_ureg_series = inflow_ureg_series[include_plants]
         di['Inflow_ureg'] = inflow_ureg_series.round(
             4).fillna(0).unstack().swaplevel().to_dict()
     else:
         di['Inflow_ureg'] = {}
+
+    # Total inflow
+    if hasattr(obj.data, 'inflow_series'):
+        inflow_series = copy.copy(obj.data.inflow_series)
+
+        inflow_series.index = np.arange(len(inflow_series.index))
+        inflow_series = inflow_series[inflow_series.index.isin(
+            di['TIME'][None])]
+        inflow_series.rename(
+            columns={str(i): obj.type2prefix['Hydro'] + '%.2d' % int(i)
+                     for i in obj.plant_buses_type["Hydro"]},
+            inplace=True)
+        inflow_series[inflow_series < 0] = 0.0
+        include_plants = di["STORAGE"][None]
+        for p in include_plants:
+            if p not in inflow_series.columns:
+                inflow_series.loc[:, p] = 0.0
+        inflow_series = inflow_series[include_plants]
+        tot_inflow_series = inflow_series + inflow_ureg_series
+        di['Inflow'] = tot_inflow_series.round(4).fillna(
+            0).unstack().swaplevel().to_dict()
+    else:
+        di['Inflow'] = {}
 
     renewable_pot.set_index('Bus', inplace=True)
     #renewable_pot.fillna(0, inplace=True)
@@ -488,7 +501,8 @@ def detData(obj):
     di['Eff_in'] = eff_in
     di['Eff_out'] = eff_out
     di['Energy_max'] = en_max
-    di['Initial_storage'] = {i: 0.0 for i in di['STORAGE'][None]}
+    di['Init_storage'] = {i: 0.0 for i in di['STORAGE'][None]}
+    di['Init_storage'].update({i: 0.6 for i in di["HYDRO_STORAGE"][None]})
 
     di['Load_scaling'] = {i: param['H2_scaling'].values[0]
                           for i in di['H2_NODES'][None]}
