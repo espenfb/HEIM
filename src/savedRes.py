@@ -14,6 +14,8 @@ from shapely.geometry import Point, LineString
 import copy
 from ast import literal_eval
 import detModelRes as dmr
+import folium
+from shapely.geometry import LineString
 
 idx = pd.IndexSlice
 
@@ -87,11 +89,15 @@ class savedRes(object):
         if objects.__class__ == str:
             if hasattr(self, objects):
                 out = getattr(self, objects)
+            else:
+                print("Results has no attribute ", objects)
         elif objects.__class__ == list:
             out = []
             for i in objects:
                 if hasattr(self, i):
                     out += getattr(self, i)
+                else:
+                    print("Results has no attribute ", i)
         return out
 
     # Get - Investments
@@ -105,7 +111,9 @@ class savedRes(object):
             retired_cap = []
 
         inv = self.inv_res.loc[idx[objects], idx[['Init_' + cap_type,
-                               'new_' + cap_type] + retired_cap]].fillna(0)
+                               'new_' + cap_type] + retired_cap]]
+        inv = inv[inv.isna().sum(axis=1) <2]
+
         if cap_type == 'power':
             inv['retired_cap'] *= -1
         return inv
@@ -131,7 +139,7 @@ class savedRes(object):
 
     def getInvByNode(self, nodes=None, cap_type='power', lower_lim=0.0):
 
-        nodes = self.getObjects(nodes, default=self.NODES)
+        nodes = self.getObjects(nodes, default=self.INTERNAL_NODES)
 
         inv_by_node = pd.DataFrame()
         for i in nodes:
@@ -254,11 +262,11 @@ class savedRes(object):
 
     # Plots
     def plotValue(self, val_type, objects=None, times=idx[:],
-                  lower_lim=0.0):
+                  lower_lim=1E-3):
         ''' Plots operational results by value type'''
 
         vals = self.getValue(val_type, objects=objects, times=idx[:],
-                             lower_lim=1.0)
+                             lower_lim=lower_lim)
         vals = vals.droplevel(1, axis=1)
         if not vals.empty:
             ax = vals.plot()
@@ -272,7 +280,7 @@ class savedRes(object):
             print("No values found!")
 
     def plotValueByNode(self, val_type, nodes=None, kind='bar',
-                        objects=None, times=idx[:], lower_lim=0.0):
+                        objects=None, times=idx[:], lower_lim=1E-3):
 
         val_by_node = self.getValueByNode(val_type, nodes=nodes,
                                           objects=objects, times=times,
@@ -284,7 +292,7 @@ class savedRes(object):
             ax.spines['top'].set_visible(False)
 
     def plotValueByType(self, val_type, objects=None, times=idx[:],
-                        lower_lim=0.0, sort_by_cf=True, kind='area',
+                        lower_lim=1E-3, sort_by_cf=True, kind='area',
                         **kwargs):
 
         val_by_type = self.getValueByType(val_type, objects=objects,
@@ -541,10 +549,13 @@ class savedRes(object):
                 t_unit_format = '%d'
 
         if plot_shape:
-            file_name = "../geo/Texas_State_Boundary_Detailed/ \
-                        Texas_State_Boundary_Detailed.shp"
-            tx = gpd.read_file(file_name)
-            tx.plot(ax=ax, color='white', edgecolor='black', zorder=0)
+            file_name = "geo/ref-countries-2020-10m.shp/CNTR_RG_10M_2020_4326.shp/CNTR_RG_10M_2020_4326.shp"
+            world = gpd.read_file(file_name)
+            no = world[world.CNTR_ID == "NO"]
+            no.plot(ax=ax, color='white', edgecolor='black', zorder=0)
+            pad = 0.5
+            ax.set_ylim(self.data.bus.Lat.min()-pad, self.data.bus.Lat.max()+pad)
+            ax.set_xlim(self.data.bus.Lon.min()-pad, self.data.bus.Lon.max()+pad)
 
         if objects:
             size = self.data.bus['Size']
@@ -652,3 +663,96 @@ class savedRes(object):
             cbar.set_label(trans_name + ' capacity [' + trans_unit + ']')
         plt.tight_layout(pad=0.0)
         plt.show()
+        return ax
+
+    def busBaseMap(self, zoom_start=8, radius=10, color="k"):
+
+        bus_lat = self.data.bus.Lat
+        bus_lon = self.data.bus.Lon
+        base_map = folium.Map(
+            location=[bus_lat.mean(), bus_lon.mean()],
+            zoom_start=8)
+
+        bus_map = self.data.bus.explore(marker_kwds=dict(radius=radius, color=color),
+                                   m=base_map, zoom_start=zoom_start)
+
+        return bus_map
+
+    def busCapMap(self, objects, zoom_start=8, color="black"):
+
+        inv = self.getInv(objects=objects)
+        cap = inv.sum(axis=1).to_frame("Cap")
+
+        cap["Coordinates"] = pd.Series()
+        cap = gpd.GeoDataFrame(cap, geometry="Coordinates")
+        for (k,v) in cap.iterrows():
+            node = self.NODE_TO_PLANT[k]
+            cap.loc[k, "node"] = node
+            node_nr = int(node[-2:])
+            crd = self.data.bus.loc[node_nr, "Coordinates"]
+            cap.loc[k, "Coordinates"] = crd
+
+        bus_lat = self.data.bus.Lat
+        bus_lon = self.data.bus.Lon
+        base_map = folium.Map(
+            location=[bus_lat.mean(), bus_lon.mean()],
+            zoom_start=zoom_start)
+
+        return plot_node_scale(cap, "Cap", m=base_map, color=color)
+
+    def mapLines(self, map, line_type="Existing"):
+
+        lines = self.data.line
+        buses = self.data.bus
+
+        selected_lines = lines[lines.Type == line_type]
+
+        line_geo = [LineString([buses.loc[v.From].Coordinates, buses.loc[v.To].Coordinates])
+        for (k, v) in selected_lines.iterrows()]
+
+        lines_gdf = gpd.GeoDataFrame(selected_lines, geometry=line_geo)
+
+        return lines_gdf.explore(m=map)
+
+    def mapLineCap(self, map, nodes):
+
+        line_cap = gpd.GeoDataFrame(self.getLineInv(nodes=nodes),
+                                    geometry="geometry")
+
+        return plot_line_scale(line_cap, "Cap", map)
+
+    def plotMapInteractive(self, zoom_start=8):
+
+        bus_map = self.busBaseMap(zoom_start=zoom_start)
+        map = self.mapLines(bus_map)
+
+        return map
+
+    def plotMapCap(self, bus_objects="WIND_POWER_PLANTS",
+                   line_nodes=["EL_NODES", "MARKET_NODES"],
+                   zoom_start=8, node_color="black"):
+
+        bus_map = self.busCapMap(bus_objects, zoom_start=zoom_start,
+                                 color=node_color)
+        map = self.mapLineCap(bus_map, line_nodes)
+
+        return map
+
+def plot_node_scale(gdf, column, color="black", m=None):
+    max_scale = 30/max(gdf[column])
+    for n, r in gdf.iterrows():
+        gdf.loc[gdf.index == n].explore(
+            marker_kwds=dict(radius=r[column]*max_scale),
+            style_kwds=dict(color=color, fillOpacity=0.5,
+                            fillColor=color),
+            m=m)
+    return m
+
+
+def plot_line_scale(gdf, column, m=None):
+    max_scale = 30/max(gdf[column])
+    for n, r in gdf.iterrows():
+        gdf.loc[gdf.index == n].explore(
+            style_kwds=dict(weight=r[column]*max_scale),
+            m=m)
+    return m

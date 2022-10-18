@@ -94,40 +94,54 @@ def detData(obj):
     storage_char.set_index('Type', inplace=True)
     storage_char.fillna(0, inplace=True)
 
-    di['PLANT_TYPES'] = {
-        None: plant_char.index.to_list() + storage_char.index.to_list()}
-    power_plants = plant_char.index[obj.data.plant_char.Class.isin(
-        ['RE', 'TH', 'H2TH'])]
-    di['POWER_PLANT_TYPES'] = {None: power_plants.to_list()}
-    thermal_plants = \
-        plant_char.index[obj.data.plant_char.Class.isin(['TH', 'H2TH'])]
-    di['THERMAL_PLANT_TYPES'] = {None: thermal_plants.to_list()}
-    renewable_plants = \
-        plant_char.index[obj.data.plant_char.Class.isin(['RE'])]
-    di['RENEWABLE_PLANT_TYPES'] = {None: renewable_plants.to_list()}
-    hydrogen_plants = \
-        plant_char.index[obj.data.plant_char.Class.isin(['H2'])]
-    di['HYDROGEN_PLANT_TYPES'] = {None: hydrogen_plants.to_list()}
-    di['STORAGE_TYPES'] = {None: storage_char.index.to_list()}
-    h2_conv_plants = \
-        plant_char.index[obj.data.plant_char.Class.isin(['H2TH'])]
-    di['CONV_TYPES'] = {None: ['PEMEL'] + h2_conv_plants.to_list()}
-    di['GAS_PLANT_TYPES'] = {None: ['CC Gas', 'CT Gas', 'CCS Gas']}
-    di['SMR_PLANT_TYPES'] = {None: ['SMR', 'SMR CCS']}
-
     obj.type2prefix = {'Biomass': 'B', 'CC Gas': 'CCG', 'CT Gas': 'CTG',
                        'CCS Gas': 'CCSG', 'CT H2': 'CTH', 'CC H2': 'CCH',
                        'Coal': 'C', 'CCS Coal': 'CCSC', 'Nuclear': 'N',
                        'Solar': 'S', 'Offshore Wind': 'OW',
-                       'Onshore Wind': 'SW', 'Wind': 'W',
+                       'Onshore Wind': 'SW',
                        'Hydrogen': 'HS', 'Battery': 'BS',
                        'PEMEL': 'PEMEL', 'PEMFC': 'PEMFC',
                        'SMR': 'SMR', 'SMR CCS': 'SMRCCS',
                        'Hydro': 'HP'} 
-                        # 'ICE Gas' : 'ICEG','SOFC':'SOFC',
-                        # 'ICE H2' : 'ICEH',
+                     # 'ICE Gas' : 'ICEG','SOFC':'SOFC',
+                     # 'ICE H2' : 'ICEH',
 
     di['type2prefix'] = obj.type2prefix
+
+    #di['PLANT_TYPES'] = {
+    #    None: plant_char.index.to_list() + storage_char.index.to_list()}
+    di['PLANT_TYPES'] = {None: list(obj.type2prefix.keys())}
+    #power_plants = plant_char.index[obj.data.plant_char.Class.isin(
+    #    ['RE', 'TH', 'H2TH'])]
+    #di['POWER_PLANT_TYPES'] = {None: power_plants.to_list()}
+    di['POWER_PLANT_TYPES'] = {None: ['Biomass', 'CC Gas', 'CT Gas', 'CCS Gas',
+                                      'Coal', 'CCS Coal', 'Nuclear'
+                                      'CT H2', 'CC H2', 'PEMFC',
+                                      'Solar', 'Offshore Wind', 'Onshore Wind',
+                                      'Wind']}
+    #thermal_plants = \
+    #    plant_char.index[obj.data.plant_char.Class.isin(['TH', 'H2TH'])]
+    #di['THERMAL_PLANT_TYPES'] = {None: thermal_plants.to_list()}
+    di['THERMAL_PLANT_TYPES'] = {None: ['Biomass', 'CC Gas', 'CT Gas', 'CCS Gas',
+                                        'CT H2', 'CC H2', 'PEMFC',
+                                        'Coal', 'CCS Coal', 'Nuclear']}
+    #renewable_plants = \
+    #    plant_char.index[obj.data.plant_char.Class.isin(['RE'])]
+    #di['RENEWABLE_PLANT_TYPES'] = {None: renewable_plants.to_list()}
+    di['RENEWABLE_PLANT_TYPES'] = {None: ['Solar', 'Offshore Wind',
+                                          'Onshore Wind']}
+    #hydrogen_plants = \
+    #    plant_char.index[obj.data.plant_char.Class.isin(['H2'])]
+    #di['HYDROGEN_PLANT_TYPES'] = {None: hydrogen_plants.to_list()}
+    di['HYDROGEN_PLANT_TYPES'] = {None: ['PEMEL', 'SMR', 'SMR CCS']}
+    #di['STORAGE_TYPES'] = {None: storage_char.index.to_list()}
+    di['STORAGE_TYPES'] = {None: ['Hydrogen', 'Battery', 'Hydro']}
+    #h2_conv_plants = \
+    #    plant_char.index[obj.data.plant_char.Class.isin(['H2TH'])]
+    #di['CONV_TYPES'] = {None: ['PEMEL'] + h2_conv_plants.to_list()}
+    di['CONV_TYPES'] = {None: ['PEMEL'] + ['CT H2', 'CC H2', 'PEMFC']}
+    di['GAS_PLANT_TYPES'] = {None: ['CC Gas', 'CT Gas', 'CCS Gas']}
+    di['SMR_PLANT_TYPES'] = {None: ['SMR', 'SMR CCS']}
 
     # Create individual plant set and set for plant-type to individual plants
     di['TYPE_TO_PLANTS'] = {}
@@ -135,7 +149,7 @@ def detData(obj):
     di['TYPE_TO_CONV_PLANTS'] = {}
     di['PLANTS'] = {None: []}
     obj.plant_buses_type = {}
-    for k in di['PLANT_TYPES'][None]:
+    for k in obj.type2prefix.keys():
         if k in di['POWER_PLANT_TYPES'][None]:
             class_type = '_POWER_PLANTS'
         elif k in di['HYDROGEN_PLANT_TYPES'][None]:
@@ -153,11 +167,13 @@ def detData(obj):
             obj.plant_buses_type[k] = installed["Bus"][to_include].values
             di[set_name] = {None: [obj.type2prefix[k] + '%.2d' %
                                    i for i in obj.plant_buses_type[k]]}
-        else:
+        elif k in plant_char.index.to_list():
             # Plants that are created for all dual buses,
             # potential is assumed everywhere
             di[set_name] = {None: [obj.type2prefix[k] + '%.2d' %
                                    i for i in dual_buses.Bus.tolist()]}
+        else:
+            di[set_name] = {None: []}
         di['PLANTS'][None] += [obj.type2prefix[k] + '%.2d' %
                                i for i in dual_buses.Bus.tolist()]
 
@@ -251,6 +267,7 @@ def detData(obj):
                                    if j[-2:] == i[-2:]] for i in eln}
 
     # Parameters
+    GW2MW = 1E3
     di['NTime'] = {None: len(obj.timerange)}
     di['Period_ratio'] = {None: len(obj.timerange)/8760}
 
@@ -266,10 +283,12 @@ def detData(obj):
 
     h2_load = pd.DataFrame(index=obj.data.load_series.index,
                            columns=di['H2_NODES'][None])
+    hours_per_year = len(obj.data.load_series.index)
+    scale = GW2MW/hours_per_year
     for i in di['H2_NODES'][None]:
         indx = obj.data.hydrogen_load.Bus == int(i[-2:])
-        value = obj.data.hydrogen_load.loc[indx, 'high'].values/24  # kg/h
-        # value = [0.0]
+        value = obj.data.hydrogen_load.loc[indx,
+                                           'high'].values*scale  # MWh/h
         if len(value) > 0:
             h2_load.loc[:, i] = value[0]
     h2_load.fillna(0, inplace=True)
@@ -298,8 +317,6 @@ def detData(obj):
     init_cap_dict = {'%s%.2d' % (
         obj.type2prefix[j], i): init_cap[i, j] for i, j in init_cap.keys()}
     di['Init_power'] = init_cap_dict
-
-    GW2MW = 1E3
 
     init_energy = copy.copy(obj.data.installed_energy)
     init_energy.set_index('Bus', inplace=True)
@@ -362,18 +379,27 @@ def detData(obj):
     fuel_rate_dict = fuel_rate.to_dict()
     di['Conv_rate'] = {}
     for k, v in di['TYPE_TO_CONV_PLANTS'].items():
-        di['Conv_rate'].update({i: fuel_rate_dict[k] for i in v})
+        if k in fuel_rate_dict.keys():
+            di['Conv_rate'].update({i: fuel_rate_dict[k] for i in v})
+        else:
+            di['Conv_rate'].update({i: 0.0 for i in v})
 
     di['Fuel_rate'] = {}
     fuel_types = di['GAS_PLANT_TYPES'][None] + di['SMR_PLANT_TYPES'][None]
     for i in fuel_types:
-        di['Fuel_rate'].update({i: fuel_rate_dict[i]})
+        if i in fuel_rate_dict.keys():
+            di['Fuel_rate'].update({i: fuel_rate_dict[i]})
+        else:
+            di['Fuel_rate'].update({i: 0.0})
 
     aux_rate = storage_char['Aux power (MWh/eu)']
     aux_rate_dict = aux_rate.to_dict()
     di['Aux_rate'] = {}
     for k, v in di['TYPE_TO_STORAGE'].items():
-        di['Aux_rate'].update({i: aux_rate_dict[k] for i in v})
+        if k in aux_rate_dict.keys():
+            di['Aux_rate'].update({i: aux_rate_dict[k] for i in v})
+        else:
+            di['Aux_rate'].update({i: 0.0 for i in v})
 
     retirement_cost = copy.copy(obj.data.retirement_cost)
     retirement_cost.index = obj.data.retirement_cost.Type

@@ -376,13 +376,12 @@ def buildDetModel(mutables={}):
     # define cost components
     def plant_inv_cost(m):
         return sum(
-                sum(m.Power_cost[j]*m.new_power[i]
+                sum(m.Power_cost[j]*m.new_power[i] + m.Fixed_power_cost[j] * m.new_power[i]
                     for i in m.TYPE_TO_PLANTS[j]) for j in m.PLANT_TYPES)
 
     def storage_inv_cost(m):
         return sum(
                 sum((m.Energy_cost[j] + m.Fixed_energy_cost[j])*m.new_energy[i]
-                    + m.Fixed_power_cost[j] * m.new_power[i]
                     for i in m.TYPE_TO_STORAGE[j]) for j in m.STORAGE_TYPES)
 
     def thermal_fixed_and_retirement_costs(m):
