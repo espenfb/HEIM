@@ -738,14 +738,15 @@ class savedRes(object):
 
         return map
 
-def plot_node_scale(gdf, column, color="black", m=None):
+def plot_node_scale(gdf, column, color="black", m=None, lim=1E-3):
     max_scale = 30/max(gdf[column])
     for n, r in gdf.iterrows():
-        gdf.loc[gdf.index == n].explore(
-            marker_kwds=dict(radius=r[column]*max_scale),
-            style_kwds=dict(color=color, fillOpacity=0.5,
-                            fillColor=color),
-            m=m)
+        if r[column] >= lim:
+            gdf.loc[gdf.index == n].explore(
+                marker_kwds=dict(radius=r[column]*max_scale),
+                style_kwds=dict(color=color, fillOpacity=0.5,
+                                fillColor=color),
+                m=m)
     return m
 
 
