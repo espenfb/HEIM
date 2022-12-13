@@ -1,6 +1,6 @@
 type,                   file
 bus,                    bus_data.csv
-line,                   lines_and_pipes_dummy_h2.csv
+line,                   lines_and_pipes_updated.csv
 installed,              installed_cap.csv
 installed_energy,       installed_energy.csv
 max_num_plants,         max_num_plants.csv
