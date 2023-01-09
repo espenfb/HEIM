@@ -1,0 +1,6 @@
+Type, Inv ($/pu-year), Fix ($/pu-year),Var ($/eu), Fuel (in eu/out eu), Emission (kg/eu), CCS rate (kg/eu), Typical Plant Size (pu), Min Gen (pu),Ramp (%/h), Start [$/pu], Class
+Offshore Wind, 235029, 83034,0,0,0,0,1400,0,1,0,RE
+Onshore Wind, 59573,0,7,0,0,0,474,0,1,0,RE
+Solar, 29247, 3384,0,0,0,0,0.5,0,1,0,RE
+PEMEL,64915,15000,0.0,1.5,0,0,50,0,1,0,H2
+PEMFC,318203,46357,1.04,1.5,0,0,50,0,1,0,H2TH
