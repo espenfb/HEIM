@@ -20,3 +20,7 @@
 *.mps
 *.log
 case_haugaland/results/
+lib/
+bin/
+
+.idea/

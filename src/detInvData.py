@@ -172,6 +172,12 @@ def detData(obj):
             # potential is assumed everywhere
             di[set_name] = {None: [obj.type2prefix[k] + '%.2d' %
                                    i for i in dual_buses.Bus.tolist()]}
+        elif k in storage_char.index.to_list() and k != ['Hydro']:
+            # Storage that are created for all dual buses,
+            # potential is assumed everywhere
+            di[set_name] = {None: [obj.type2prefix[k] + '%.2d' %
+                                   i for i in dual_buses.Bus.tolist()]}
+
         else:
             di[set_name] = {None: []}
         di['PLANTS'][None] += [obj.type2prefix[k] + '%.2d' %
