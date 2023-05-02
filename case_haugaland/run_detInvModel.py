@@ -9,7 +9,7 @@ import os
 import sys
 from pathlib import Path
 
-filepath = os.path.abspath('')
+filepath = os.path.abspath('../')
 sys.path.append(str(Path(filepath) / "src"))
 
 import detInvModel as dim
@@ -21,9 +21,9 @@ time_data = {
 'end_date': pd.Timestamp(year = 2020, month = 1, day = 1),
 'ref_date': pd.Timestamp(year = 2019, month = 1, day = 1)}
 dirs = {
-'data_dir' : "case_haugaland\\data\\",
+'data_dir' : './data/',
 'ctrl_data_file' : 'ctrl_data.csv',
-'res_dir' : 'results\\'}
+'res_dir' : './results/'}
 
 
 # %%
