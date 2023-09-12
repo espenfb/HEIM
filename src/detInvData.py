@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 
-def detData(obj):
+def detData(obj, hydrogen_load = "high"):
     ''' Data input for the investment model according to the structure of the
     abstract model.'''
     di = {}
@@ -294,7 +294,7 @@ def detData(obj):
     for i in di['H2_NODES'][None]:
         indx = obj.data.hydrogen_load.Bus == int(i[-2:])
         value = obj.data.hydrogen_load.loc[indx,
-                                           'high'].values*scale  # MWh/h
+                                           hydrogen_load].values*scale  # MWh/h
         if len(value) > 0:
             h2_load.loc[:, i] = value[0]
     h2_load.fillna(0, inplace=True)

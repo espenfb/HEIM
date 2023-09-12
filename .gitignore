@@ -24,3 +24,6 @@ lib/
 bin/
 
 .idea/
+
+results/
+results_test/
